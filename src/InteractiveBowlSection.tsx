@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import UnfoldingPaper from './UnfoldingPaper';
 
 // Constants for the interactive section
 const NUM_PAPER_BITS = 10;
@@ -123,7 +124,8 @@ const InteractiveBowlSection = () => {
 
   const [paperBits, setPaperBits] = useState<PaperBitState[]>(getInitialPaperBitsStateResponsive);
   const [appStatus, setAppStatus] = useState<'initial' | 'shuffling' | 'selected' | 'opened'>('initial');
-  const [openedPaperContent, setOpenedPaperContent] = useState<PaperBitState | null>(null);
+  const [paperToDisplay, setPaperToDisplay] = useState<PaperBitState | null>(null);
+  const [isPaperOpen, setIsPaperOpen] = useState(false);
   const [unseenNoteIds, setUnseenNoteIds] = useState<number[]>(() => initialPaperBitConfigs.map(config => config.id));
 
   const shuffleButtonRef = useRef<HTMLButtonElement>(null);
@@ -146,7 +148,7 @@ const InteractiveBowlSection = () => {
   const handleShuffle = () => {
     if (appStatus === 'shuffling' || appStatus === 'selected') return;
     setAppStatus('shuffling');
-    setOpenedPaperContent(null);
+    setPaperToDisplay(null);
     if (shuffleIntervalRef.current) clearInterval(shuffleIntervalRef.current);
     
     const currentCircleCenterY = -(currentCircleRadius * CIRCLE_Y_OFFSET_FACTOR);
@@ -236,7 +238,8 @@ const InteractiveBowlSection = () => {
 
   const handlePaperTap = (tappedBit: PaperBitState) => {
     if (appStatus !== 'selected' || !tappedBit.isChosenForOpening) return;
-    setOpenedPaperContent(tappedBit);
+    setPaperToDisplay(tappedBit);
+    setIsPaperOpen(true);
     setAppStatus('opened');
     setPaperBits(prevBits =>
       prevBits.map(bit => {
@@ -248,17 +251,11 @@ const InteractiveBowlSection = () => {
   };
 
   const handleClosePaper = () => {
-    const paperElement = document.getElementById('openedPaperModalContent');
-    if (paperElement) {
-        paperElement.classList.remove('opened-paper-enter');
-        paperElement.classList.add('opened-paper-exit');
-    }
-    setTimeout(() => {
-        setAppStatus('initial');
-        setOpenedPaperContent(null);
-        setPaperBits(getInitialPaperBitsStateResponsive());
-        if (shuffleButtonRef.current) shuffleButtonRef.current.focus();
-    }, 280);
+    setIsPaperOpen(false);
+    setAppStatus('initial');
+    setPaperToDisplay(null);
+    setPaperBits(getInitialPaperBitsStateResponsive());
+    if (shuffleButtonRef.current) shuffleButtonRef.current.focus();
   };
 
   const isButtonDisabled = appStatus === 'shuffling';
@@ -336,34 +333,13 @@ const InteractiveBowlSection = () => {
         Shuffle
       </button>
 
-      {/* Opened Paper Modal */}
-      {appStatus === 'opened' && openedPaperContent && (
-        <div
-            id="openedPaperModal"
-            className="fixed inset-0 bg-black/60 flex justify-center items-center z-[200] p-4"
-            onClick={handleClosePaper}
-            aria-modal="true"
-            aria-labelledby="paperTitle"
-            aria-describedby="paperMessageContent"
-        >
-          <div
-            id="openedPaperModalContent"
-            className="bg-rose-50 p-6 md:p-8 pt-10 md:pt-12 rounded-lg shadow-2xl max-w-lg w-full aspect-[4/3] sm:aspect-auto sm:max-h-[80vh] relative flex flex-col justify-center items-center text-center text-rose-800 opened-paper-enter overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="paperTitle" className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">{openedPaperContent.text} Reveals:</h2>
-            <p id="paperMessageContent" className="text-lg sm:text-xl md:text-2xl leading-relaxed px-2">
-              "{openedPaperContent.message}"
-            </p>
-            <button
-              onClick={handleClosePaper}
-              className="absolute top-2 right-2 sm:top-3 sm:right-3 text-2xl sm:text-3xl text-rose-500 hover:text-rose-700 transition-colors"
-              aria-label="Close message"
-            >
-              &times;
-            </button>
-          </div>
-        </div>
+      {/* Opened Paper Modal - Replaced with UnfoldingPaper */}
+      {paperToDisplay && (
+        <UnfoldingPaper 
+          isOpen={isPaperOpen}
+          message={paperToDisplay.message} 
+          onClose={handleClosePaper} 
+        />
       )}
     </>
   );
