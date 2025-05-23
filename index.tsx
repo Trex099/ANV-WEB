@@ -3,10 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const NUM_PAPER_BITS = 10;
-const DESKTOP_BOWL_HEIGHT_PX = 208; // Corresponds to h-[13rem] approx.
-const MOBILE_BOWL_HEIGHT_PX = 160; // Corresponds to h-[10rem] approx.
-
-const BOWL_Y_OFFSET_FROM_CENTER = 80; // Common vertical offset for bowl center
+const DESKTOP_BOWL_HEIGHT_PX = 208; 
+const MOBILE_BOWL_HEIGHT_PX = 160; 
 
 const DESKTOP_CIRCLE_RADIUS = 200;
 const MOBILE_CIRCLE_RADIUS = 140;
@@ -14,7 +12,7 @@ const MOBILE_CIRCLE_RADIUS = 140;
 const ANIMATION_DURATION_MS = 800;
 const SHUFFLE_HOLD_DURATION_MS = 3000;
 const SHUFFLE_UPDATE_INTERVAL_MS = 500;
-const CIRCLE_Y_OFFSET_FACTOR = 1.2;
+const CIRCLE_Y_OFFSET_FACTOR_FROM_BOWL_CENTER = 1.3; // How high circle is above bowl center
 
 const DESKTOP_INITIAL_PAPER_BIT_SCALE = 0.65;
 const MOBILE_INITIAL_PAPER_BIT_SCALE = 0.55;
@@ -36,13 +34,12 @@ interface PaperBitConfig {
   id: number;
   text: string;
   messageIndex: number;
-  x: number; // Base x offset for desktop
-  yBaseOffset: number; // Base y offset for desktop, relative to pile center
+  x: number; 
+  yBaseOffset: number; 
   rotate: number;
   zIndex: number;
 }
 
-// Define fixed positions for initial paper bits (designed for desktop layout)
 const initialPaperBitConfigs: PaperBitConfig[] = [
   { id: 0, text: "Love Note 1", messageIndex: 0, x: -10, yBaseOffset: 15, rotate: 5, zIndex: 6 },
   { id: 1, text: "Love Note 2", messageIndex: 1, x: 10, yBaseOffset: 18, rotate: -3, zIndex: 7 },
@@ -60,8 +57,8 @@ interface PaperBitState {
   id: number;
   message: string;
   text: string;
-  x: number;
-  y: number;
+  x: number; // Offset from bowl center
+  y: number; // Offset from bowl center
   rotate: number;
   scale: number;
   opacity: number;
@@ -104,15 +101,17 @@ const App: React.FC = () => {
   const currentCircleRadius = isSmallScreen ? MOBILE_CIRCLE_RADIUS : DESKTOP_CIRCLE_RADIUS;
   const currentInitialPaperBitScale = isSmallScreen ? MOBILE_INITIAL_PAPER_BIT_SCALE : DESKTOP_INITIAL_PAPER_BIT_SCALE;
   
-  const getCurrentPaperPileCenterInBowlY = useCallback((bowlHeight: number) => {
-      return (BOWL_Y_OFFSET_FROM_CENTER - (bowlHeight / 2) + (isSmallScreen ? 55 : 70)); // Adjusted depth factor
-  }, [isSmallScreen]);
+  const getPaperPileCenterYInBowl = useCallback(() => {
+      // y is relative to bowl center. Negative means above bowl center.
+      // Position pile slightly above the visual bottom of the bowl's inner surface.
+      return isSmallScreen ? - (currentBowlHeightPx * 0.15) : - (currentBowlHeightPx * 0.1);
+  }, [isSmallScreen, currentBowlHeightPx]);
 
   const getInitialPaperBitsStateResponsive = useCallback((): PaperBitState[] => {
     const scale = currentInitialPaperBitScale;
-    const pileCenterY = getCurrentPaperPileCenterInBowlY(currentBowlHeightPx);
+    const pileCenterY = getPaperPileCenterYInBowl();
     const xOffsetScaleFactor = isSmallScreen ? 0.75 : 1.0;
-    const yBaseOffsetScaleFactor = isSmallScreen ? 0.75 : 1.0;
+    const yBaseOffsetScaleFactor = isSmallScreen ? 0.65 : 0.8; // Make vertical spread smaller on mobile
 
     return initialPaperBitConfigs.map(config => ({
       id: config.id,
@@ -126,7 +125,7 @@ const App: React.FC = () => {
       zIndex: config.zIndex,
       transitionDurationMs: ANIMATION_DURATION_MS,
     }));
-  }, [isSmallScreen, currentBowlHeightPx, currentInitialPaperBitScale, getCurrentPaperPileCenterInBowlY]);
+  }, [isSmallScreen, currentInitialPaperBitScale, getPaperPileCenterYInBowl]);
   
   const [paperBits, setPaperBits] = useState<PaperBitState[]>(getInitialPaperBitsStateResponsive);
   const [appStatus, setAppStatus] = useState<'initial' | 'shuffling' | 'selected' | 'opened'>('initial');
@@ -161,7 +160,10 @@ const App: React.FC = () => {
       clearInterval(shuffleIntervalRef.current);
     }
     
-    const currentCircleCenterY = -(currentCircleRadius * CIRCLE_Y_OFFSET_FACTOR);
+    // Y-coordinate for the center of the circle, relative to the bowl's center.
+    // Negative value means above the bowl.
+    const circleCenterYRelativeToBowl = - (currentBowlHeightPx / 2) - (currentCircleRadius * CIRCLE_Y_OFFSET_FACTOR_FROM_BOWL_CENTER * 0.5) - (isSmallScreen ? 20 : 0);
+
 
     setPaperBits(prevBits =>
       prevBits.map((bit, index) => {
@@ -170,7 +172,7 @@ const App: React.FC = () => {
         return {
           ...bit, 
           x: currentCircleRadius * Math.cos(angle),
-          y: currentCircleCenterY + (currentCircleRadius * Math.sin(angle)),
+          y: circleCenterYRelativeToBowl + (currentCircleRadius * Math.sin(angle)),
           rotate: (Math.random() - 0.5) * 15,
           scale: 1,
           opacity: 1,
@@ -193,7 +195,7 @@ const App: React.FC = () => {
             const maxShuffleOffsetX = currentCircleRadius * 1.1;
             const maxShuffleOffsetY = currentCircleRadius * 0.5;
             const newTargetX = (Math.random() - 0.5) * 2 * maxShuffleOffsetX;
-            const newTargetY = currentCircleCenterY + (Math.random() - 0.5) * 2 * maxShuffleOffsetY;
+            const newTargetY = circleCenterYRelativeToBowl + (Math.random() - 0.5) * 2 * maxShuffleOffsetY;
             return {
               ...bit,
               x: newTargetX,
@@ -232,12 +234,13 @@ const App: React.FC = () => {
           if (!selectedBitData) { return prevBitsAfterShuffle; }
 
           const selectedBitCurrentArrayIndex = bitsToUpdate.findIndex(b => b.id === selectedNoteIdToHighlight);
-          if (selectedBitCurrentArrayIndex === -1) { return prevBitsAfterShuffle; }
+          if (selectedBitCurrentArrayIndex === -1) { return prevBitsAfterShuffle; } // Should not happen
           
+          // Selected bit moves to the center of the circular formation
           finalBitsState[selectedBitCurrentArrayIndex] = {
             ...selectedBitData,
-            x: 0,
-            y: currentCircleCenterY,
+            x: 0, // Center of the circle (relative to bowl center)
+            y: circleCenterYRelativeToBowl, // Center of the circle (relative to bowl center)
             scale: isSmallScreen ? 1.15 : 1.25,
             opacity: 1,
             zIndex: 100,
@@ -257,7 +260,7 @@ const App: React.FC = () => {
                 finalBitsState[i] = { 
                   ...originalBitForThisSlot,
                   x: currentCircleRadius * Math.cos(angle),
-                  y: currentCircleCenterY + (currentCircleRadius * Math.sin(angle)),
+                  y: circleCenterYRelativeToBowl + (currentCircleRadius * Math.sin(angle)),
                   scale: 0.9,
                   opacity: 0.75,
                   zIndex: 20 + originalBitForThisSlot.id,
@@ -308,100 +311,109 @@ const App: React.FC = () => {
     setTimeout(() => {
         setAppStatus('initial');
         setOpenedPaperContent(null);
-        setPaperBits(getInitialPaperBitsStateResponsive());
+        // No need to call setPaperBits here if useEffect for [isSmallScreen, appStatus] handles it
         if (shuffleButtonRef.current) {
             shuffleButtonRef.current.focus();
         }
-    }, 280);
+    }, 280); // Match animation duration
   };
 
   const isButtonDisabled = appStatus === 'shuffling';
 
-  // Responsive class names
   const bowlSvgSizeClasses = isSmallScreen ? 'w-56 h-[10rem]' : 'w-72 h-[13rem]';
   const paperBitSizeClasses = isSmallScreen ? 'w-24 h-14 text-xs' : 'w-28 h-16 text-sm';
   const shuffleButtonClasses = isSmallScreen 
     ? 'px-6 py-3 text-base' 
     : 'px-10 py-4 text-lg';
   const tapToOpenPromptPositionClass = isSmallScreen ? '-bottom-4' : '-bottom-5';
-  const shuffleButtonTopMargin = isSmallScreen ? 20 : 30;
-
 
   return (
-    <div className="relative w-full min-h-screen flex flex-col justify-center items-center overflow-hidden select-none p-4" aria-live="polite">
-      {paperBits.map(bit => (
-        <div
-          key={bit.id}
-          role="button"
-          tabIndex={appStatus === 'selected' && bit.isChosenForOpening ? 0 : -1}
-          aria-label={bit.isChosenForOpening ? `Tap to open ${bit.text}` : bit.text}
-          onClick={() => handlePaperTap(bit)}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handlePaperTap(bit)}
-          className={`paper-bit absolute flex flex-col justify-center items-center ${paperBitSizeClasses} bg-amber-50 border border-amber-200 shadow-md rounded-sm cursor-pointer p-1 text-amber-700 font-semibold ${ (appStatus === 'selected' && bit.isChosenForOpening) ? 'hover:shadow-xl hover:scale-[1.02]' : '' }`}
-          style={{
-            left: '50%',
-            top: '50%',
-            transform: `translate(-50%, -50%) translate(${bit.x}px, ${bit.y}px) rotate(${bit.rotate}deg) scale(${bit.scale})`,
-            opacity: bit.opacity,
-            zIndex: bit.zIndex,
-            transition: `transform ${bit.transitionDurationMs || ANIMATION_DURATION_MS}ms ease-in-out, opacity ${bit.transitionDurationMs || ANIMATION_DURATION_MS * 0.7}ms ease-in-out`,
-          }}
+    <div className="flex flex-col items-center w-full min-h-screen overflow-y-auto p-4" aria-live="polite">
+      {/* Interactive Section */}
+      <div className="relative w-full flex flex-col items-center pt-16 pb-8">
+        {/* Bowl and Paper Bits Container */}
+        <div 
+          className={`relative ${bowlSvgSizeClasses}`}
+          aria-hidden="true" 
         >
-          <span>{bit.text}</span>
-          {appStatus === 'selected' && bit.isChosenForOpening && (
-            <span className={`absolute ${tapToOpenPromptPositionClass} text-xs bg-black/70 text-white px-1.5 py-0.5 rounded-sm tap-to-open-prompt whitespace-nowrap`}>
-              Tap to open
-            </span>
-          )}
+          {paperBits.map(bit => (
+            <div
+              key={bit.id}
+              role="button"
+              tabIndex={appStatus === 'selected' && bit.isChosenForOpening ? 0 : -1}
+              aria-label={bit.isChosenForOpening ? `Tap to open ${bit.text}` : bit.text}
+              onClick={() => handlePaperTap(bit)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handlePaperTap(bit)}
+              className={`paper-bit absolute flex flex-col justify-center items-center ${paperBitSizeClasses} bg-amber-50 border border-amber-200 shadow-md rounded-sm cursor-pointer p-1 text-amber-700 font-semibold select-none ${ (appStatus === 'selected' && bit.isChosenForOpening) ? 'hover:shadow-xl hover:scale-[1.02]' : '' }`}
+              style={{
+                left: '50%', 
+                top: '50%',  
+                transform: `translate(-50%, -50%) translate(${bit.x}px, ${bit.y}px) rotate(${bit.rotate}deg) scale(${bit.scale})`,
+                opacity: bit.opacity,
+                zIndex: bit.zIndex,
+                transition: `transform ${bit.transitionDurationMs || ANIMATION_DURATION_MS}ms ease-in-out, opacity ${bit.transitionDurationMs || ANIMATION_DURATION_MS * 0.7}ms ease-in-out`,
+              }}
+            >
+              <span>{bit.text}</span>
+              {appStatus === 'selected' && bit.isChosenForOpening && (
+                <span className={`absolute ${tapToOpenPromptPositionClass} text-xs bg-black/70 text-white px-1.5 py-0.5 rounded-sm tap-to-open-prompt whitespace-nowrap`}>
+                  Tap to open
+                </span>
+              )}
+            </div>
+          ))}
+          <svg 
+              viewBox="0 0 300 204" 
+              className="w-full h-full" // SVG takes full size of its container
+              shapeRendering="geometricPrecision"
+          >
+              <defs>
+                <filter id="bowlShadow" x="-10%" y="-10%" width="120%" height="120%">
+                  <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#000000" floodOpacity="0.15" />
+                </filter>
+              </defs>
+              <g filter="url(#bowlShadow)">
+                  <path d="M9,78 C9,174 45,204 150,204 C255,204 291,174 291,78 Z"
+                        className="text-amber-800" fill="currentColor" />
+                  <ellipse cx="150" cy="75" rx="141" ry="48"
+                           className="text-amber-600" fill="currentColor"/>
+                  <ellipse cx="150" cy="78" rx="120" ry="33"
+                           className="text-amber-700" fill="currentColor"/>
+                  <path d="M60,57 C105,69 195,69 240,57"
+                        stroke="rgba(255,255,255,0.3)" strokeWidth="7.5" fill="none" strokeLinecap="round"/>
+              </g>
+          </svg>
         </div>
-      ))}
 
-      <div
-        className="absolute left-1/2 transform -translate-x-1/2"
-        style={{
-            top: `calc(50% + ${BOWL_Y_OFFSET_FROM_CENTER}px - ${currentBowlHeightPx / 2}px)`,
-            zIndex: 5
-        }}
-        aria-hidden="true"
-      >
-        <svg 
-            viewBox="0 0 300 204" 
-            className={bowlSvgSizeClasses}
-            shapeRendering="geometricPrecision"
+        {/* Shuffle Button */}
+        <button
+          ref={shuffleButtonRef}
+          onClick={handleShuffle}
+          disabled={isButtonDisabled}
+          className={`mt-8 ${shuffleButtonClasses} bg-pink-500 text-white font-bold rounded-lg shadow-md hover:bg-pink-600 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:ring-opacity-75 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed`}
+          aria-label="Shuffle messages"
         >
-            <defs>
-              <filter id="bowlShadow" x="-10%" y="-10%" width="120%" height="120%">
-                <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#000000" floodOpacity="0.15" />
-              </filter>
-            </defs>
-            <g filter="url(#bowlShadow)">
-                <path d="M9,78 C9,174 45,204 150,204 C255,204 291,174 291,78 Z"
-                      className="text-amber-800" fill="currentColor" />
-                <ellipse cx="150" cy="75" rx="141" ry="48"
-                         className="text-amber-600" fill="currentColor"/>
-                <ellipse cx="150" cy="78" rx="120" ry="33"
-                         className="text-amber-700" fill="currentColor"/>
-                <path d="M60,57 C105,69 195,69 240,57"
-                      stroke="rgba(255,255,255,0.3)" strokeWidth="7.5" fill="none" strokeLinecap="round"/>
-            </g>
-        </svg>
+          Shuffle
+        </button>
       </div>
 
-      <button
-        ref={shuffleButtonRef}
-        onClick={handleShuffle}
-        disabled={isButtonDisabled}
-        className={`absolute left-1/2 transform -translate-x-1/2 mt-4 ${shuffleButtonClasses} bg-pink-500 text-white font-bold rounded-lg shadow-md hover:bg-pink-600 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:ring-opacity-75 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed`}
-        style={{ top: `calc(50% + ${BOWL_Y_OFFSET_FROM_CENTER + (currentBowlHeightPx / 2) + shuffleButtonTopMargin}px)` }}
-        aria-label="Shuffle messages"
-      >
-        Shuffle
-      </button>
+      {/* Memories Section */}
+      <div className="w-full max-w-3xl mx-auto p-6 sm:p-8 bg-white/60 backdrop-blur-sm rounded-xl shadow-xl my-12">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center text-rose-700 mb-6">Memories</h2>
+        <ul className="space-y-3 text-rose-800">
+          {Array.from({ length: 15 }).map((_, index) => (
+            <li key={index} className="p-3 bg-rose-50/70 rounded-md shadow-sm">
+              Memory Item {index + 1} - Placeholder for a wonderful memory.
+            </li>
+          ))}
+        </ul>
+      </div>
 
+      {/* Opened Paper Modal */}
       {appStatus === 'opened' && openedPaperContent && (
         <div
             id="openedPaperModal"
-            className="fixed inset-0 bg-black/60 flex justify-center items-center z-[200] p-4" // Added padding for modal backdrop
+            className="fixed inset-0 bg-black/60 flex justify-center items-center z-[200] p-4" 
             onClick={handleClosePaper}
             aria-modal="true"
             aria-labelledby="paperTitle"
@@ -409,7 +421,7 @@ const App: React.FC = () => {
         >
           <div
             id="openedPaperModalContent"
-            className="bg-rose-50 p-6 md:p-8 pt-10 md:pt-12 rounded-lg shadow-2xl max-w-lg w-full aspect-[4/3] sm:aspect-auto sm:max-h-[80vh] relative flex flex-col justify-center items-center text-center text-rose-800 opened-paper-enter overflow-y-auto" // Adjusted modal styling
+            className="bg-rose-50 p-6 md:p-8 pt-10 md:pt-12 rounded-lg shadow-2xl max-w-lg w-full aspect-[4/3] sm:aspect-auto sm:max-h-[80vh] relative flex flex-col justify-center items-center text-center text-rose-800 opened-paper-enter overflow-y-auto" 
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="paperTitle" className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">{openedPaperContent.text} Reveals:</h2>
