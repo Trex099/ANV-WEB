@@ -336,7 +336,7 @@ const App = () => {
       <div className="relative w-full h-screen flex-shrink-0"> 
         {/* Anniversary Title (absolute within this section) */}
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 pt-4 sm:pt-6 z-10">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-pink-600 text-center whitespace-nowrap">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-pink-600 text-center whitespace-nowrap">
             Happy Anniversary BabyGirl ❤️
           </h1>
         </div>
