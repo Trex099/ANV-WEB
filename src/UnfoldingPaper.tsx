@@ -1,7 +1,8 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, Suspense } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
+import ErrorBoundary from './ErrorBoundary';
 
 interface UnfoldingPaperProps {
   message: string;
@@ -41,177 +42,160 @@ const createPaperSegment = (width: number, height: number, texture: THREE.Textur
 };
 
 const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: boolean; onAnimationComplete: () => void }) => {
-  const mainGroupRef = useRef<THREE.Group>(null!); // Overall group for centering and rotation
-  const rightFoldGroupRef = useRef<THREE.Group>(null!); // Group for the right two segments, folds along vertical center
+  const mainGroupRef = useRef<THREE.Group>(null!); 
+  const rightFoldGroupRef = useRef<THREE.Group>(null!); 
   
-  // Refs for the four segments (TL, TR, BL, BR when looking at unfolded paper)
-  const topLeftSegmentRef = useRef<THREE.Mesh>(null!);
-  const topRightSegmentRef = useRef<THREE.Mesh>(null!);
-  const bottomLeftSegmentRef = useRef<THREE.Mesh>(null!);
-  const bottomRightSegmentRef = useRef<THREE.Mesh>(null!);
+  const texture = useMemo(() => {
+    try {
+      if (!props.textureUrl) {
+        console.log("PaperMesh: No textureUrl provided.");
+        return null;
+      }
+      console.log("PaperMesh: Attempting to load texture:", props.textureUrl);
+      const loadedTexture = new THREE.TextureLoader().load(props.textureUrl, 
+        () => console.log("PaperMesh: Texture loaded successfully:", props.textureUrl),
+        undefined,
+        (err) => console.error("PaperMesh: Error loading texture:", props.textureUrl, err)
+      );
+      return loadedTexture;
+    } catch (error) {
+      console.error("PaperMesh: Exception during texture loading setup:", error);
+      return null;
+    }
+  }, [props.textureUrl]);
 
-  const texture = props.textureUrl ? useLoader(THREE.TextureLoader, props.textureUrl) : null;
   const tl = useRef<gsap.core.Timeline | null>(null);
 
-  // Memoize segments to prevent re-creation on re-renders unless texture changes
   const segments = useMemo(() => {
-    if (!texture) return null; // Wait for texture
-    // Create 4 segments, each a quarter of the total paper size
-    // UVs are set to map to quadrants of the texture image
-    // Top-Left: (0, 0.5) offset, (0.5, 0.5) scale
+    if (!texture) {
+        console.log("PaperMesh: No texture available for segments.");
+        return null;
+    }
+    console.log("PaperMesh: Creating segments with texture.");
     const tlSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'white', [0, 0.5], [0.5, 0.5]);
-    // Top-Right: (0.5, 0.5) offset, (0.5, 0.5) scale
     const trSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'lightgrey', [0.5, 0.5], [0.5, 0.5]);
-    // Bottom-Left: (0, 0) offset, (0.5, 0.5) scale
     const blSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'grey', [0, 0], [0.5, 0.5]);
-    // Bottom-Right: (0.5, 0) offset, (0.5, 0.5) scale
     const brSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'darkgrey', [0.5, 0], [0.5, 0.5]);
     return { tlSeg, trSeg, blSeg, brSeg };
   }, [texture]);
 
   useEffect(() => {
-    if (!segments || !mainGroupRef.current || !rightFoldGroupRef.current || 
-        !topLeftSegmentRef.current || !topRightSegmentRef.current || 
-        !bottomLeftSegmentRef.current || !bottomRightSegmentRef.current) {
+    if (!segments || !mainGroupRef.current || !rightFoldGroupRef.current) {
+      console.log("PaperMesh Effect: Segments or refs not ready. Segments:", !!segments, "MainRef:", !!mainGroupRef.current, "RightFoldRef:", !!rightFoldGroupRef.current);
       return;
     }
-
-    // Setup initial positions and rotations for a paper folded in quarters.
-    // Imagine it's folded like a small square booklet, then opens up.
-    // Final state: TL | TR
-    //              BL | BR
-    // Fold 1: Right side (TR, BR) folds over left side (TL, BL) along vertical centerline.
-    // Fold 2: Top side (TL, TR after first fold) folds down over bottom side (BL, BR after first fold) along horizontal centerline.
-
-    // Assign memoized segments to refs (this is a bit of a workaround for direct ref assignment with useMemo)
-    topLeftSegmentRef.current = segments.tlSeg;
-    topRightSegmentRef.current = segments.trSeg;
-    bottomLeftSegmentRef.current = segments.blSeg;
-    bottomRightSegmentRef.current = segments.brSeg;
-
-    // Clear previous children if any from potential re-runs (though useMemo helps)
-    mainGroupRef.current.clear();
-    rightFoldGroupRef.current.clear();
-
-    // Assemble the paper:
-    // Left side (top-left and bottom-left segments)
-    mainGroupRef.current.add(segments.tlSeg);
-    mainGroupRef.current.add(segments.blSeg);
-    // Right fold group contains top-right and bottom-right segments
-    rightFoldGroupRef.current.add(segments.trSeg);
-    rightFoldGroupRef.current.add(segments.brSeg);
-    mainGroupRef.current.add(rightFoldGroupRef.current);
+    console.log("PaperMesh Effect: Setting up initial poses and GSAP timeline.");
 
     // --- Initial Poses (Folded State) ---
-    // Segments are HALF_PAPER_WIDTH x HALF_PAPER_HEIGHT
-    // Top-Left segment (becomes the front-facing part of the fully folded paper)
-    segments.tlSeg.position.set(-QUARTER_PAPER_WIDTH, QUARTER_PAPER_HEIGHT, 0.01); // Slightly in front
-    // Bottom-Left segment (directly behind TL when top is folded down)
-    segments.blSeg.position.set(-QUARTER_PAPER_WIDTH, -QUARTER_PAPER_HEIGHT, 0);
-    
-    // Right-Fold-Group (contains TR and BR)
-    // This group will pivot around the left edge of TL/BL segments (vertical centerline of paper)
-    rightFoldGroupRef.current.position.set(0, 0, 0); // Pivot is at x=0 of mainGroup
-    segments.trSeg.position.set(QUARTER_PAPER_WIDTH, QUARTER_PAPER_HEIGHT, 0); // Relative to rightFoldGroup
-    segments.brSeg.position.set(QUARTER_PAPER_WIDTH, -QUARTER_PAPER_HEIGHT, -0.01); // Slightly behind when folded
+    // The JSX structure now handles adding segments to groups.
+    // This effect only sets their initial transformations and the GSAP timeline.
 
-    // Initial Folds:
-    // 1. Top fold (TL folds over BL, TR folds over BR). Rotate mainGroup around X-axis.
-    //    However, it's easier to rotate the segments themselves or a sub-group for this.
-    //    Let's assume the "booklet" is closed first, meaning the right side is folded over the left.
-    //    So rightFoldGroup is rotated -PI around Y-axis and positioned at x=0.
-    gsap.set(rightFoldGroupRef.current.rotation, { y: -Math.PI });
-    gsap.set(rightFoldGroupRef.current.position, { x: -HALF_PAPER_WIDTH, z: 0.005 }); // Positioned to fold over left
-    
-    // 2. Then the whole thing (now TL/BL on top of TR/BR effectively) is folded top over bottom.
-    //    Rotate the entire mainGroup around its bottom edge (horizontal centerline of the current folded state).
-    //    For simplicity, let's rotate top segments (TL, TR) down. This is complex with current hierarchy.
-    //    Alternative: Fold TL over BL, and TR (in its group) over BR.
-    
-    // Let's simplify: Start with right side (TR,BR) folded over left (TL,BL)
-    // Then TL is folded over BL. TR is folded over BR.
-    // This means `segments.tlSeg` and `segments.trSeg` are rotated -PI around X-axis.
-    // Their pivot point needs to be their bottom edge.
+    // Reposition segments for pivot points at their edges and initial layout
+    // Note: These positions are relative to their parent group in the JSX structure.
+    // TL and BL are direct children of mainGroupRef.
+    // TR and BR are children of rightFoldGroupRef.
 
-    // Reposition segments for pivot points at their edges
-    segments.tlSeg.position.set(-QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.02); // y is center of this segment
+    // Left side (TL, BL)
+    segments.tlSeg.position.set(-QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.02); 
     segments.blSeg.position.set(-QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
-    segments.trSeg.position.set(QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.01); // relative to its group
+    
+    // Right side (TR, BR) within rightFoldGroupRef
+    // Their X positions are relative to rightFoldGroupRef's origin.
+    segments.trSeg.position.set(QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.01);
     segments.brSeg.position.set(QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
 
-    // Set initial folded state:
+    // Set initial folded state rotations:
     // 1. Top segments folded down over bottom segments
     gsap.set(segments.tlSeg.rotation, { x: -Math.PI }); 
     gsap.set(segments.trSeg.rotation, { x: -Math.PI });
-    // Adjust y positions because rotation is around center. Effectively they sit on top of BL and BR.
-    gsap.set(segments.tlSeg.position, { y: segments.blSeg.position.y + QUARTER_PAPER_HEIGHT, z: 0.02 });
-    gsap.set(segments.trSeg.position, { y: segments.brSeg.position.y + QUARTER_PAPER_HEIGHT, z: 0.01 });
+    // Adjust Y positions because their rotation is around their own center.
+    // When folded, tlSeg sits on blSeg, trSeg sits on brSeg.
+    gsap.set(segments.tlSeg.position, { y: segments.blSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.tlSeg.position.z });
+    gsap.set(segments.trSeg.position, { y: segments.brSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.trSeg.position.z });
 
     // 2. Right group (TR+BR) folded over Left group (TL+BL)
-    // rightFoldGroupRef pivots around its own local x= -QUARTER_PAPER_WIDTH (effectively the spine)
-    // For this, we need to shift the contents of rightFoldGroupRef so its left edge is at its local x=0
-    segments.trSeg.position.x = HALF_PAPER_WIDTH / 2; // Centered in its half
-    segments.brSeg.position.x = HALF_PAPER_WIDTH / 2;
-    gsap.set(rightFoldGroupRef.current.position, { x: -HALF_PAPER_WIDTH, y: 0, z: 0.005}); // Position for folding
-    gsap.set(rightFoldGroupRef.current.rotation, { y: -Math.PI }); // Folded over
+    // rightFoldGroupRef itself is positioned and rotated.
+    // Its children (TR, BR) are already positioned relative to it.
+    gsap.set(rightFoldGroupRef.current.position, { x: -HALF_PAPER_WIDTH, y: 0, z: 0.005}); 
+    gsap.set(rightFoldGroupRef.current.rotation, { y: -Math.PI }); 
     
-
     // GSAP Timeline for Unfolding
-    tl.current = gsap.timeline({ paused: true, onComplete: props.onAnimationComplete, onReverseComplete: props.onAnimationComplete });
+    tl.current = gsap.timeline({ 
+        paused: true, 
+        onComplete: () => {
+            console.log("PaperMesh GSAP: Unfolding animation complete.");
+            props.onAnimationComplete();
+        }, 
+        onReverseComplete: () => {
+            console.log("PaperMesh GSAP: Folding animation complete (reverse).");
+            props.onAnimationComplete();
+        },
+        onError: (e) => {
+            console.error("PaperMesh GSAP: Error in timeline", e);
+        }
+    });
+
+    console.log("PaperMesh Effect: GSAP timeline created.");
 
     // Step 1: Unfold top segments (TL and TR)
     tl.current.to([segments.tlSeg.rotation, segments.trSeg.rotation], {
-      x: 0, // Unfold to flat
+      x: 0, 
       duration: FOLD_ANIMATION_DURATION,
       ease: 'power3.inOut',
-      stagger: 0.05, // Slight stagger if desired
-    }, "+=0.1"); // Start slightly after previous step or at beginning
-    // Adjust positions back as they unfold (pivot was center)
+      stagger: 0.05,
+    }, "+=0.1"); 
+    // Adjust positions back as they unfold
     tl.current.to([segments.tlSeg.position, segments.trSeg.position], {
-        y: (idx) => idx === 0 ? HALF_PAPER_HEIGHT / 2 : HALF_PAPER_HEIGHT / 2, // Back to their centered Y pos
+        // Target Y is their original centered Y position relative to their direct parent
+        y: (idx) => idx === 0 ? HALF_PAPER_HEIGHT / 2 : HALF_PAPER_HEIGHT / 2, 
         duration: FOLD_ANIMATION_DURATION,
         ease: 'power3.inOut',
         stagger: 0.05,
-    }, "<" ); // Run concurrently with rotation
+    }, "<" );
 
     // Step 2: Unfold the right group (TR+BR)
     tl.current.to(rightFoldGroupRef.current.rotation, {
-      y: 0, // Unfold to flat
-      duration: FOLD_ANIMATION_DURATION * 1.2, // Slightly longer for a larger movement
+      y: 0, 
+      duration: FOLD_ANIMATION_DURATION * 1.2, 
       ease: 'power3.inOut',
     });
     tl.current.to(rightFoldGroupRef.current.position, {
-        x: 0, // Move to its final position (centered)
+        x: 0, 
         z: 0,
         duration: FOLD_ANIMATION_DURATION * 1.2,
         ease: 'power3.inOut',
-    }, "<"); // Run concurrently
+    }, "<");
 
-  }, [segments, props.onAnimationComplete]); // Re-run if segments (texture) or callback changes
+  }, [segments, props.onAnimationComplete]);
 
   useEffect(() => {
     if (tl.current) {
       if (props.isUnfolding) {
+        console.log("PaperMesh Effect: Playing unfolding animation.");
         tl.current.play();
       } else {
-        // Ensure timeline is properly reset for reversing from any point
-        tl.current.timeScale(1.5).reverse(0); // Reverse from its current position, slightly faster
+        console.log("PaperMesh Effect: Reversing folding animation.");
+        tl.current.timeScale(1.5).reverse(0);
       }
+    } else {
+        console.log("PaperMesh Effect: GSAP timeline (tl.current) not available for play/reverse.");
     }
   }, [props.isUnfolding]);
 
-  // If segments are not ready (texture not loaded), render nothing for PaperMesh
-  if (!segments) return null; 
+  if (!segments) {
+    console.log("PaperMesh Render: No segments to render. Returning fallback or null.");
+    return <mesh><planeGeometry args={[1,1]} /><meshBasicMaterial color="red" wireframe /></mesh>; // Fallback if no segments
+  } 
+
+  console.log("PaperMesh Render: Rendering segments.");
 
   return (
-    <group ref={mainGroupRef} rotation={[0,0,0]}> {/* Base rotation/position for the whole paper */}
-        {/* Children are added dynamically in useEffect based on `segments` */}
-        {/* This ensures that Object3Ds are not re-created on every render by JSX */}
-        <primitive object={segments.tlSeg} ref={topLeftSegmentRef} />
-        <primitive object={segments.blSeg} ref={bottomLeftSegmentRef} />
+    <group ref={mainGroupRef}>
+        <primitive object={segments.tlSeg} />
+        <primitive object={segments.blSeg} />
         <group ref={rightFoldGroupRef}>
-            <primitive object={segments.trSeg} ref={topRightSegmentRef} />
-            <primitive object={segments.brSeg} ref={bottomRightSegmentRef} />
+            <primitive object={segments.trSeg} />
+            <primitive object={segments.brSeg} />
         </group>
     </group>
   );
@@ -222,31 +206,45 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
   const [isFullyOpen, setIsFullyOpen] = useState(false); // True when paper is static and fully open
 
   useEffect(() => {
+    console.log(`UnfoldingPaper Effect: isOpen changed to ${isOpen}. isAnimating: ${isAnimating}, isFullyOpen: ${isFullyOpen}`);
     if (isOpen) {
       setIsAnimating(true);
       setIsFullyOpen(false); 
     } else {
-      setIsFullyOpen(false);
-      setIsAnimating(true); 
+      // If it was open or animating to open, and now isOpen is false, start closing animation
+      if (isFullyOpen || isAnimating) {
+        setIsFullyOpen(false);
+        setIsAnimating(true); 
+      } else {
+        // If it was already closed and not animating, do nothing
+        setIsAnimating(false);
+      }
     }
   }, [isOpen]);
 
   if (!isOpen && !isAnimating) {
+    console.log("UnfoldingPaper Render: Not open and not animating, returning null.");
     return null; 
   }
 
   const handleInternalClose = () => {
+    console.log("UnfoldingPaper: handleInternalClose triggered.");
     onClose(); 
   };
   
   const handleAnimationComplete = () => {
+    console.log(`UnfoldingPaper: handleAnimationComplete. isOpen: ${isOpen}`);
     if (isOpen) {
         setIsAnimating(false);
         setIsFullyOpen(true);
+        console.log("UnfoldingPaper: Now fully open and not animating.");
     } else {
-        setIsAnimating(false);
+        setIsAnimating(false); // Done closing
+        console.log("UnfoldingPaper: Now fully closed and not animating.");
     }
   };
+  
+  console.log(`UnfoldingPaper Render: isOpen: ${isOpen}, isAnimating: ${isAnimating}, isFullyOpen: ${isFullyOpen}`);
 
   return (
     <div
@@ -276,19 +274,28 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <Canvas camera={{ position: [0, 0, 6], fov: 50 }}> {/* Zoomed out slightly */}
-          <ambientLight intensity={0.7} />
-          <directionalLight position={[2, 3, 5]} intensity={1.0} />
-          <directionalLight position={[-2, 3, -5]} intensity={0.5} /> {/* Added another light */}
-          <React.Suspense fallback={null}>
-            <PaperMesh 
-              message={message} 
-              isUnfolding={isOpen}
-              onAnimationComplete={handleAnimationComplete}
-              textureUrl="/textures/@Generated Image May 21, 2025 - 3_47PM.jpg"
-            />
-          </React.Suspense>
-        </Canvas>
+        <ErrorBoundary fallbackRender={(error, errorInfo) => (
+          <div style={{ color: 'white', background: 'rgba(100,0,0,0.7)', padding: '20px', height:'100%', overflowY:'auto'}}>
+            <h3>Animation Error</h3>
+            <p>The 3D paper animation encountered a problem.</p>
+            <pre><strong>Error:</strong> {error?.toString()}</pre>
+            <details><summary>Details</summary><pre>{errorInfo?.componentStack}</pre></details>
+          </div>
+        )}>
+          <Canvas camera={{ position: [0, 0, 6], fov: 50 }}> {/* Zoomed out slightly */}
+            <ambientLight intensity={0.7} />
+            <directionalLight position={[2, 3, 5]} intensity={1.0} />
+            <directionalLight position={[-2, 3, -5]} intensity={0.5} /> {/* Added another light */}
+            <Suspense fallback={ <mesh><planeGeometry /><meshBasicMaterial color="blue" wireframeLinewidth={3} /></mesh> /* Basic fallback for Suspense */ }>
+              <PaperMesh 
+                message={message} 
+                isUnfolding={isOpen}
+                onAnimationComplete={handleAnimationComplete}
+                textureUrl="/textures/@Generated Image May 21, 2025 - 3_47PM.jpg"
+              />
+            </Suspense>
+          </Canvas>
+        </ErrorBoundary>
         {(isFullyOpen && isOpen) && ( 
           <>
             <button
