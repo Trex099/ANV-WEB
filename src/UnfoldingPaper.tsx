@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useRef, useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
@@ -8,6 +8,7 @@ interface UnfoldingPaperProps {
   message: string;
   onClose: () => void;
   isOpen: boolean;
+  isSmallScreen?: boolean;
 }
 
 const PAPER_WIDTH = 3.5; // Slightly wider for a more standard paper aspect ratio
@@ -33,7 +34,7 @@ const createPaperSegment = (width: number, height: number, texture: THREE.Textur
 
   const material = new THREE.MeshStandardMaterial({
     map: texture,
-    color: !texture ? colorIfNotTextured : undefined,
+    color: !texture ? colorIfNotTextured : undefined, // Fallback color if texture is null
     roughness: 0.8,
     metalness: 0.1,
     side: THREE.DoubleSide,
@@ -41,93 +42,256 @@ const createPaperSegment = (width: number, height: number, texture: THREE.Textur
   return new THREE.Mesh(geometry, material);
 };
 
-const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: boolean; onAnimationComplete: () => void }) => {
+// Constants for text texture generation
+const DESKTOP_CANVAS_WIDTH = 700;
+const DESKTOP_CANVAS_HEIGHT = 900;
+const DESKTOP_FONT_SIZE_PX = 32;
+const DESKTOP_MARGIN_HORIZONTAL_PX = 35; // 5% of 700
+const DESKTOP_MARGIN_VERTICAL_PX = 45;   // 5% of 900
+const DESKTOP_LINE_HEIGHT_MULTIPLIER = 1.3;
+
+const MOBILE_CANVAS_WIDTH = 490; // 0.7x desktop
+const MOBILE_CANVAS_HEIGHT = 630; // 0.7x desktop
+const MOBILE_FONT_SIZE_PX = 30; // Slightly smaller absolute, but larger relative to canvas
+const MOBILE_MARGIN_HORIZONTAL_PX = 25; // ~5% of 490
+const MOBILE_MARGIN_VERTICAL_PX = 30;   // ~5% of 630
+const MOBILE_LINE_HEIGHT_MULTIPLIER = 1.35; // Slightly more spacing for smaller text
+
+const TEXT_COLOR = '#3D3D3D'; // Common for both
+
+const generateTextTexture = (
+    baseTexture: THREE.Texture | null,
+    message: string,
+    isSmallScreen: boolean | undefined, // Added isSmallScreen parameter
+    onComplete: (texture: THREE.CanvasTexture) => void,
+    onError: (error: any) => void
+  ) => {
+
+    const canvasWidth = isSmallScreen ? MOBILE_CANVAS_WIDTH : DESKTOP_CANVAS_WIDTH;
+    const canvasHeight = isSmallScreen ? MOBILE_CANVAS_HEIGHT : DESKTOP_CANVAS_HEIGHT;
+    const fontSizePx = isSmallScreen ? MOBILE_FONT_SIZE_PX : DESKTOP_FONT_SIZE_PX;
+    const marginHorizontalPx = isSmallScreen ? MOBILE_MARGIN_HORIZONTAL_PX : DESKTOP_MARGIN_HORIZONTAL_PX;
+    const marginVerticalPx = isSmallScreen ? MOBILE_MARGIN_VERTICAL_PX : DESKTOP_MARGIN_VERTICAL_PX;
+    const lineHeightMultiplier = isSmallScreen ? MOBILE_LINE_HEIGHT_MULTIPLIER : DESKTOP_LINE_HEIGHT_MULTIPLIER;
+    const textFont = `${fontSizePx}px Arial, sans-serif`;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext('2d');
+  
+    if (!ctx) {
+      console.error("Failed to get 2D context for texture generation");
+      onError(new Error("Failed to get 2D context"));
+      return;
+    }
+  
+    // Function to draw the base texture and then the text
+    const drawCanvasContent = (img?: HTMLImageElement) => {
+      // Fill background (e.g., with white if no base texture or if base texture fails to load)
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (img) {
+        try {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        } catch (e) {
+            console.error("Error drawing base image to canvas:", e);
+            // Continue with white background if image drawing fails
+        }
+      } else {
+        console.warn("No base image provided or loaded, using white background for texture.");
+      }
+  
+      // Text properties
+      ctx.font = textFont; // Use dynamically set textFont
+      ctx.fillStyle = TEXT_COLOR;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+  
+      // Text wrapping
+      const words = message.split(' ');
+      let line = '';
+      const lines = [];
+      const maxWidth = canvas.width - 2 * marginHorizontalPx; // Use dynamic margin
+  
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+          lines.push(line.trim());
+          line = words[n] + ' ';
+        } else {
+          line = testLine;
+        }
+      }
+      lines.push(line.trim());
+  
+      // Calculate total text height and starting Y position to center the block
+      const singleLineHeight = fontSizePx * lineHeightMultiplier; // Use dynamic font size and line height
+      const totalTextHeight = lines.length * singleLineHeight;
+      let startY = (canvas.height - totalTextHeight) / 2 + (singleLineHeight / 2); // Centered vertically
+
+      // Ensure text starts within vertical margins if it's too long
+      startY = Math.max(startY, marginVerticalPx + (singleLineHeight / 2)); // Use dynamic margin
+
+      // Draw lines
+      for (let i = 0; i < lines.length; i++) {
+        const lineY = startY + i * singleLineHeight;
+        // Check if the *start* of the next line would exceed the bottom margin area
+        if (lineY - (singleLineHeight / 2) + (fontSizePx * 0.2) > canvas.height - marginVerticalPx && i > 0) { // fontSizePx*0.2 is a heuristic for descenders
+            console.warn("Text content might be too long for the available space; truncating.");
+            break;
+        }
+        ctx.fillText(lines[i], canvas.width / 2, lineY);
+      }
+  
+      const canvasTexture = new THREE.CanvasTexture(canvas);
+      canvasTexture.needsUpdate = true;
+      onComplete(canvasTexture);
+    };
+
+    if (baseTexture && baseTexture.image) {
+        if (baseTexture.image.complete && baseTexture.image.naturalHeight !== 0) {
+            // Image already loaded
+            drawCanvasContent(baseTexture.image);
+        } else {
+            // Image not yet loaded, wait for it
+            const img = baseTexture.image as HTMLImageElement;
+            img.onload = () => {
+                baseTexture.needsUpdate = true; // Important for the texture to be usable
+                drawCanvasContent(img);
+            };
+            img.onerror = (e) => {
+                console.error("Error loading base texture image:", e);
+                onError(e);
+                drawCanvasContent(); // Draw with white background if base fails
+            };
+            // If the image src is set but not loaded, it should eventually call onload or onerror.
+            // If src is not yet set (e.g. TextureLoader is still working), this might be an issue.
+            // TextureLoader handles this by itself; direct image manipulation needs care.
+            if (!img.src) { // This check might be too simplistic
+                console.warn("Base texture image source is not set. Drawing without base texture.");
+                drawCanvasContent();
+            }
+        }
+    } else {
+        console.warn("No baseTexture or baseTexture.image provided. Drawing with white background.");
+        // Draw immediately with a white background or default paper color
+        drawCanvasContent();
+    }
+};
+
+
+const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: boolean; onAnimationComplete: () => void; isSmallScreen?: boolean; }) => {
   const mainGroupRef = useRef<THREE.Group>(null!); 
   const rightFoldGroupRef = useRef<THREE.Group>(null!); 
-  
-  const texture = useMemo(() => {
-    try {
-      if (!props.textureUrl) {
-        console.log("PaperMesh: No textureUrl provided.");
-        return null;
+  const [dynamicTexture, setDynamicTexture] = useState<THREE.CanvasTexture | null>(null);
+  const [textureError, setTextureError] = useState<string | null>(null);
+
+  // Load the base paper texture using useLoader, which integrates with Suspense
+  const baseTexture = props.textureUrl ? useLoader(THREE.TextureLoader, props.textureUrl) : null;
+
+  useEffect(() => {
+    let currentTexture: THREE.CanvasTexture | null = null;
+
+    const handleTextureGenerated = (newTexture: THREE.CanvasTexture) => {
+      if (currentTexture && currentTexture !== newTexture) {
+        // This case should not happen if logic is correct, but as a safeguard
+        currentTexture.dispose(); 
       }
-      console.log("PaperMesh: Attempting to load texture:", props.textureUrl);
-      const loadedTexture = new THREE.TextureLoader().load(props.textureUrl, 
-        () => console.log("PaperMesh: Texture loaded successfully:", props.textureUrl),
-        undefined,
-        (err) => console.error("PaperMesh: Error loading texture:", props.textureUrl, err)
-      );
-      return loadedTexture;
-    } catch (error) {
-      console.error("PaperMesh: Exception during texture loading setup:", error);
-      return null;
+      setDynamicTexture((prevTexture) => {
+        if (prevTexture && prevTexture !== newTexture) { // Ensure we don't dispose the new one if set rapidly
+          prevTexture.dispose();
+        }
+        return newTexture;
+      });
+      setTextureError(null);
+      currentTexture = newTexture; 
+    };
+
+    const handleTextureError = (error: any) => {
+      console.error("Error generating dynamic texture:", error);
+      setTextureError(`Failed to generate texture: ${error.toString()}`);
+      setDynamicTexture((prevTexture) => {
+        if (prevTexture) prevTexture.dispose();
+        return null;
+      });
+    };
+
+    if (!props.textureUrl && baseTexture === null) { // Explicitly handle no textureUrl case
+      console.warn("PaperMesh: No textureUrl provided. Text will be on a white background.");
+      generateTextTexture(null, props.message, props.isSmallScreen, handleTextureGenerated, handleTextureError);
+    } else if (baseTexture) { // baseTexture is loaded (or null if no textureUrl)
+      generateTextTexture(baseTexture, props.message, props.isSmallScreen, handleTextureGenerated, handleTextureError);
     }
-  }, [props.textureUrl]);
+    // If props.textureUrl is provided but baseTexture is still loading, Suspense handles it.
+    // This effect will re-run once baseTexture is loaded.
+
+    return () => {
+      // Cleanup function when effect re-runs or component unmounts
+      if (currentTexture) {
+        currentTexture.dispose();
+      }
+      // Also ensure the state-held texture is cleaned if it's being replaced by an error state or unmount
+      setDynamicTexture(prevTexture => {
+        if (prevTexture && prevTexture !== currentTexture) { // If currentTexture was set to state
+             // This check is tricky. The goal is to dispose the one that was in state if it's different from the one we just created and are about to dispose.
+             // More robust: rely on the next effect run to clean its "prevTexture"
+        }
+        return prevTexture; // Keep or clear based on new state in main effect body
+      });
+    };
+  }, [props.message, props.textureUrl, baseTexture, props.isSmallScreen]); // Added props.isSmallScreen
+
 
   const tl = useRef<gsap.core.Timeline | null>(null);
 
   const segments = useMemo(() => {
-    if (!texture) {
-        console.log("PaperMesh: No texture available for segments.");
+    if (textureError) {
+        console.error("PaperMesh: Texture error, cannot create segments:", textureError);
         return null;
     }
-    console.log("PaperMesh: Creating segments with texture.");
-    const tlSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'white', [0, 0.5], [0.5, 0.5]);
-    const trSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'lightgrey', [0.5, 0.5], [0.5, 0.5]);
-    const blSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'grey', [0, 0], [0.5, 0.5]);
-    const brSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, texture, 'darkgrey', [0.5, 0], [0.5, 0.5]);
+    if (!dynamicTexture) {
+        return null;
+    }
+    // UVs are set up for a single texture spanning all 4 segments
+    const tlSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, dynamicTexture, 'white', [0, 0.5], [0.5, 0.5]);
+    const trSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, dynamicTexture, 'lightgrey', [0.5, 0.5], [0.5, 0.5]);
+    const blSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, dynamicTexture, 'grey', [0, 0], [0.5, 0.5]);
+    const brSeg = createPaperSegment(HALF_PAPER_WIDTH, HALF_PAPER_HEIGHT, dynamicTexture, 'darkgrey', [0.5, 0], [0.5, 0.5]);
     return { tlSeg, trSeg, blSeg, brSeg };
-  }, [texture]);
+  }, [dynamicTexture, textureError]);
 
   useEffect(() => {
+    // This effect sets up the GSAP timeline for folding/unfolding.
+    // It depends on `segments` being ready.
+    // The actual animation poses should remain the same.
     if (!segments || !mainGroupRef.current || !rightFoldGroupRef.current) {
-      console.log("PaperMesh Effect: Segments or refs not ready. Segments:", !!segments, "MainRef:", !!mainGroupRef.current, "RightFoldRef:", !!rightFoldGroupRef.current);
       return;
     }
-    console.log("PaperMesh Effect: Setting up initial poses and GSAP timeline.");
 
     // --- Initial Poses (Folded State) ---
-    // The JSX structure now handles adding segments to groups.
-    // This effect only sets their initial transformations and the GSAP timeline.
-
-    // Reposition segments for pivot points at their edges and initial layout
-    // Note: These positions are relative to their parent group in the JSX structure.
-    // TL and BL are direct children of mainGroupRef.
-    // TR and BR are children of rightFoldGroupRef.
-
-    // Left side (TL, BL)
     segments.tlSeg.position.set(-QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.02); 
     segments.blSeg.position.set(-QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
-    
-    // Right side (TR, BR) within rightFoldGroupRef
-    // Their X positions are relative to rightFoldGroupRef's origin.
     segments.trSeg.position.set(QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.01);
     segments.brSeg.position.set(QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
 
-    // Set initial folded state rotations:
-    // 1. Top segments folded down over bottom segments
     gsap.set(segments.tlSeg.rotation, { x: -Math.PI }); 
     gsap.set(segments.trSeg.rotation, { x: -Math.PI });
-    // Adjust Y positions because their rotation is around their own center.
-    // When folded, tlSeg sits on blSeg, trSeg sits on brSeg.
     gsap.set(segments.tlSeg.position, { y: segments.blSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.tlSeg.position.z });
     gsap.set(segments.trSeg.position, { y: segments.brSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.trSeg.position.z });
 
-    // 2. Right group (TR+BR) folded over Left group (TL+BL)
-    // rightFoldGroupRef itself is positioned and rotated.
-    // Its children (TR, BR) are already positioned relative to it.
     gsap.set(rightFoldGroupRef.current.position, { x: -HALF_PAPER_WIDTH, y: 0, z: 0.005}); 
     gsap.set(rightFoldGroupRef.current.rotation, { y: -Math.PI }); 
     
-    // GSAP Timeline for Unfolding
     tl.current = gsap.timeline({ 
         paused: true, 
         onComplete: () => {
-            console.log("PaperMesh GSAP: Unfolding animation complete.");
             props.onAnimationComplete();
         }, 
         onReverseComplete: () => {
-            console.log("PaperMesh GSAP: Folding animation complete (reverse).");
             props.onAnimationComplete();
         },
         onError: (e) => {
@@ -135,25 +299,19 @@ const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: b
         }
     });
 
-    console.log("PaperMesh Effect: GSAP timeline created.");
-
-    // Step 1: Unfold top segments (TL and TR)
     tl.current.to([segments.tlSeg.rotation, segments.trSeg.rotation], {
       x: 0, 
       duration: FOLD_ANIMATION_DURATION,
       ease: 'power3.inOut',
       stagger: 0.05,
     }, "+=0.1"); 
-    // Adjust positions back as they unfold
     tl.current.to([segments.tlSeg.position, segments.trSeg.position], {
-        // Target Y is their original centered Y position relative to their direct parent
         y: (idx) => idx === 0 ? HALF_PAPER_HEIGHT / 2 : HALF_PAPER_HEIGHT / 2, 
         duration: FOLD_ANIMATION_DURATION,
         ease: 'power3.inOut',
         stagger: 0.05,
     }, "<" );
 
-    // Step 2: Unfold the right group (TR+BR)
     tl.current.to(rightFoldGroupRef.current.rotation, {
       y: 0, 
       duration: FOLD_ANIMATION_DURATION * 1.2, 
@@ -166,28 +324,34 @@ const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: b
         ease: 'power3.inOut',
     }, "<");
 
-  }, [segments, props.onAnimationComplete]);
+  }, [segments, props.onAnimationComplete]); // Keep dependencies correct
 
   useEffect(() => {
+    // This effect controls playing or reversing the animation.
     if (tl.current) {
       if (props.isUnfolding) {
-        console.log("PaperMesh Effect: Playing unfolding animation.");
-        tl.current.play();
+        tl.current.timeScale(1).play();
       } else {
-        console.log("PaperMesh Effect: Reversing folding animation.");
-        tl.current.timeScale(1.5).reverse(0);
+        tl.current.timeScale(1.5).reverse(0); // Reverse slightly faster
       }
-    } else {
-        console.log("PaperMesh Effect: GSAP timeline (tl.current) not available for play/reverse.");
     }
   }, [props.isUnfolding]);
 
+  if (textureError) {
+    console.error("PaperMesh Render: Cannot render due to texture error:", textureError);
+    return (
+        <mesh>
+            <planeGeometry args={[PAPER_WIDTH, PAPER_HEIGHT]} />
+            <meshBasicMaterial color="red" wireframe>
+                <text value={`Error: ${textureError}`} anchorX="center" anchorY="middle" />
+            </meshBasicMaterial>
+        </mesh>
+    );
+  }
   if (!segments) {
-    console.log("PaperMesh Render: No segments to render. Returning fallback or null.");
-    return <mesh><planeGeometry args={[1,1]} /><meshBasicMaterial color="red" wireframe /></mesh>; // Fallback if no segments
+    // Provide a visual fallback that indicates loading, or just null if Suspense handles it higher up.
+    return <mesh><planeGeometry args={[PAPER_WIDTH, PAPER_HEIGHT]} /><meshBasicMaterial color="lightgray" wireframe /></mesh>;
   } 
-
-  console.log("PaperMesh Render: Rendering segments.");
 
   return (
     <group ref={mainGroupRef}>
@@ -201,12 +365,11 @@ const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: b
   );
 };
 
-const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpen }) => {
+const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpen, isSmallScreen }) => {
   const [isAnimating, setIsAnimating] = useState(false); // True while open/close animation is running
   const [isFullyOpen, setIsFullyOpen] = useState(false); // True when paper is static and fully open
 
   useEffect(() => {
-    console.log(`UnfoldingPaper Effect: isOpen changed to ${isOpen}. isAnimating: ${isAnimating}, isFullyOpen: ${isFullyOpen}`);
     if (isOpen) {
       setIsAnimating(true);
       setIsFullyOpen(false); 
@@ -223,29 +386,22 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
   }, [isOpen]);
 
   if (!isOpen && !isAnimating) {
-    console.log("UnfoldingPaper Render: Not open and not animating, returning null.");
     return null; 
   }
 
-  const handleInternalClose = () => {
-    console.log("UnfoldingPaper: handleInternalClose triggered.");
+  const handleInternalClose = useCallback(() => {
     onClose(); 
-  };
+  }, [onClose]);
   
-  const handleAnimationComplete = () => {
-    console.log(`UnfoldingPaper: handleAnimationComplete. isOpen: ${isOpen}`);
+  const handleAnimationComplete = useCallback(() => {
     if (isOpen) {
         setIsAnimating(false);
         setIsFullyOpen(true);
-        console.log("UnfoldingPaper: Now fully open and not animating.");
     } else {
         setIsAnimating(false); // Done closing
-        console.log("UnfoldingPaper: Now fully closed and not animating.");
     }
-  };
+  }, [isOpen]);
   
-  console.log(`UnfoldingPaper Render: isOpen: ${isOpen}, isAnimating: ${isAnimating}, isFullyOpen: ${isFullyOpen}`);
-
   return (
     <div
       style={{
@@ -282,67 +438,57 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
             <details><summary>Details</summary><pre>{errorInfo?.componentStack}</pre></details>
           </div>
         )}>
-          <Canvas camera={{ position: [0, 0, 6], fov: 50 }}> {/* Zoomed out slightly */}
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[2, 3, 5]} intensity={1.0} />
-            <directionalLight position={[-2, 3, -5]} intensity={0.5} /> {/* Added another light */}
-            <Suspense fallback={ <mesh><planeGeometry /><meshBasicMaterial color="blue" wireframeLinewidth={3} /></mesh> /* Basic fallback for Suspense */ }>
+          <Canvas camera={{ position: [0, 0, 6], fov: 50 }} dpr={[0.5, 1]}>
+            <ambientLight intensity={0.8} /> 
+            <directionalLight position={[2, 3, 5]} intensity={1.2} />
+            <directionalLight position={[-2, -1, -5]} intensity={0.4} /> 
+            <Suspense fallback={ 
+              <mesh>
+                <planeGeometry args={[PAPER_WIDTH/2, PAPER_HEIGHT/2]} />
+                <meshBasicMaterial color="lightblue" wireframe />
+              </mesh> 
+            }>
               <PaperMesh 
                 message={message} 
                 isUnfolding={isOpen}
                 onAnimationComplete={handleAnimationComplete}
-                textureUrl="/textures/@Generated Image May 21, 2025 - 3_47PM.jpg"
+                textureUrl="/textures/@Generated Image May 21, 2025 - 3_47PM.jpg" // This is the base paper texture
+                isSmallScreen={isSmallScreen}
               />
             </Suspense>
           </Canvas>
         </ErrorBoundary>
+        {/* Close button remains, but HTML message overlay is removed */}
         {(isFullyOpen && isOpen) && ( 
-          <>
             <button
               onClick={handleInternalClose}
               style={{
                 position: 'absolute',
                 top: '15px',
                 right: '15px',
-                background: 'none',
-                border: 'none',
-                fontSize: '2.2rem',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.4)',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                fontSize: '1.8rem',
+                lineHeight:'38px',
                 color: 'white', 
                 cursor: 'pointer',
                 zIndex: 201,
-                textShadow: '0 0 6px black, 0 0 3px black', 
+                textShadow: '0 0 4px black', 
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
               }}
               aria-label="Close message"
             >
               &times;
             </button>
-            {/* HTML text overlay for now - will be replaced by text on 3D paper */}
-            <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                color: 'black',
-                backgroundColor: 'rgba(255,255,255,0.8)',
-                padding: '20px',
-                borderRadius: '10px',
-                textAlign: 'center',
-                width: '85%',
-                maxWidth: 'calc(100% - 40px)', 
-                maxHeight: '80%',
-                overflowY: 'auto',
-                pointerEvents: 'none',
-                zIndex: 202,
-                boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-            }}>
-                <h2 style={{fontSize: 'clamp(1.1em, 4vw, 1.5em)', marginBottom: '15px', fontWeight: 'bold', color: '#333'}}>A Special Note:</h2>
-                <p style={{fontSize: 'clamp(0.9em, 3.5vw, 1.2em)', lineHeight: '1.7', color: '#444'}}>{message}</p>
-            </div>
-          </>
         )}
       </div>
     </div>
   );
 };
 
-export default UnfoldingPaper; 
+export default UnfoldingPaper;

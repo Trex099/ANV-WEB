@@ -338,7 +338,8 @@ const InteractiveBowlSection = () => {
         <UnfoldingPaper 
           isOpen={isPaperOpen}
           message={paperToDisplay.message} 
-          onClose={handleClosePaper} 
+          onClose={handleClosePaper}
+          isSmallScreen={isSmallScreen} 
         />
       )}
     </>
