@@ -36,13 +36,56 @@ class ErrorBoundary extends Component<Props, State> {
       }
       // Default fallback UI
       return (
-        <div style={{ padding: '20px', border: '1px solid red', margin: '20px', backgroundColor: '#ffeeee' }}>
-          <h2>Something went wrong.</h2>
-          <details style={{ whiteSpace: 'pre-wrap' }}>
-            {this.state.error && this.state.error.toString()}
-            <br />
-            {this.state.errorInfo && this.state.errorInfo.componentStack}
-          </details>
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            color: 'white',
+            padding: '30px',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            overflow: 'auto'
+          }}
+        >
+          <h2 style={{ color: '#ff8080', fontSize: '1.5em', marginBottom: '20px' }}>Oops! Something went wrong.</h2>
+          <div style={{ background: '#222', padding: '20px', borderRadius: '8px', width: '80%', maxWidth: '800px', maxHeight: '70vh', overflowY: 'auto' }}>
+            <h3 style={{ color: '#ffc0c0', marginTop: 0 }}>Error:</h3>
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#f0f0f0', marginBottom: '20px' }}>
+              <code>
+                {this.state.error && this.state.error.toString()}
+              </code>
+            </pre>
+            <h3 style={{ color: '#ffc0c0' }}>Details (Component Stack):</h3>
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#d0d0d0' }}>
+              <code>
+                {this.state.errorInfo && this.state.errorInfo.componentStack}
+              </code>
+            </pre>
+          </div>
+           <button 
+            onClick={() => window.location.reload()} 
+            style={{
+              marginTop: '25px',
+              padding: '10px 20px',
+              fontSize: '1em',
+              color: 'white',
+              backgroundColor: '#555',
+              border: '1px solid #777',
+              borderRadius: '5px',
+              cursor: 'pointer'
+            }}
+          >
+            Reload Page
+          </button>
         </div>
       );
     }

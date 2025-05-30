@@ -1,8 +1,9 @@
-import React, { useRef, useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useRef, useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import ErrorBoundary from './ErrorBoundary';
+import { Text } from '@react-three/drei';
 
 interface UnfoldingPaperProps {
   message: string;
@@ -41,10 +42,19 @@ const createPaperSegment = (width: number, height: number, texture: THREE.Textur
   return new THREE.Mesh(geometry, material);
 };
 
-const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: boolean; onAnimationComplete: () => void }) => {
+const PaperMesh = (props: { 
+  message: string; 
+  textureUrl?: string; 
+  isUnfolding: boolean; 
+  isTextVisible: boolean;
+  isParentAnimating: boolean; // New prop: tracks if the parent is in an animation phase
+  onAnimationComplete: () => void 
+}) => {
   const mainGroupRef = useRef<THREE.Group>(null!); 
   const rightFoldGroupRef = useRef<THREE.Group>(null!); 
-  
+  const charRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const [populatedRefsCount, setPopulatedRefsCount] = useState(0);
+
   const texture = useMemo(() => {
     try {
       if (!props.textureUrl) {
@@ -81,113 +91,210 @@ const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: b
 
   useEffect(() => {
     if (!segments || !mainGroupRef.current || !rightFoldGroupRef.current) {
-      console.log("PaperMesh Effect: Segments or refs not ready. Segments:", !!segments, "MainRef:", !!mainGroupRef.current, "RightFoldRef:", !!rightFoldGroupRef.current);
+      console.log("PaperMesh Effect: Segments or refs not ready.");
       return;
     }
-    console.log("PaperMesh Effect: Setting up initial poses and GSAP timeline.");
+    console.log("PaperMesh Effect: GSAP setup. isUnfolding:", props.isUnfolding, "isParentAnimating:", props.isParentAnimating);
 
-    // --- Initial Poses (Folded State) ---
-    // The JSX structure now handles adding segments to groups.
-    // This effect only sets their initial transformations and the GSAP timeline.
-
-    // Reposition segments for pivot points at their edges and initial layout
-    // Note: These positions are relative to their parent group in the JSX structure.
-    // TL and BL are direct children of mainGroupRef.
-    // TR and BR are children of rightFoldGroupRef.
-
-    // Left side (TL, BL)
-    segments.tlSeg.position.set(-QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.02); 
-    segments.blSeg.position.set(-QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
-    
-    // Right side (TR, BR) within rightFoldGroupRef
-    // Their X positions are relative to rightFoldGroupRef's origin.
-    segments.trSeg.position.set(QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.01);
-    segments.brSeg.position.set(QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
-
-    // Set initial folded state rotations:
-    // 1. Top segments folded down over bottom segments
-    gsap.set(segments.tlSeg.rotation, { x: -Math.PI }); 
-    gsap.set(segments.trSeg.rotation, { x: -Math.PI });
-    // Adjust Y positions because their rotation is around their own center.
-    // When folded, tlSeg sits on blSeg, trSeg sits on brSeg.
-    gsap.set(segments.tlSeg.position, { y: segments.blSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.tlSeg.position.z });
-    gsap.set(segments.trSeg.position, { y: segments.brSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.trSeg.position.z });
-
-    // 2. Right group (TR+BR) folded over Left group (TL+BL)
-    // rightFoldGroupRef itself is positioned and rotated.
-    // Its children (TR, BR) are already positioned relative to it.
-    gsap.set(rightFoldGroupRef.current.position, { x: -HALF_PAPER_WIDTH, y: 0, z: 0.005}); 
-    gsap.set(rightFoldGroupRef.current.rotation, { y: -Math.PI }); 
-    
-    // GSAP Timeline for Unfolding
-    tl.current = gsap.timeline({ 
-        paused: true, 
+    let newTimelineInstanceCreated = false;
+    if (!tl.current) {
+      console.log("PaperMesh Effect: Creating new GSAP timeline instance.");
+      newTimelineInstanceCreated = true;
+      tl.current = gsap.timeline({
+        paused: true,
         onComplete: () => {
-            console.log("PaperMesh GSAP: Unfolding animation complete.");
+          console.log("PaperMesh GSAP: Timeline onComplete. isUnfolding:", props.isUnfolding, "isParentAnimating:", props.isParentAnimating);
+          // Only call parent's onAnimationComplete if it was an actual unfold animation sequence
+          if (props.isUnfolding && props.isParentAnimating) {
             props.onAnimationComplete();
-        }, 
+          }
+        },
         onReverseComplete: () => {
-            console.log("PaperMesh GSAP: Folding animation complete (reverse).");
+          console.log("PaperMesh GSAP: Timeline onReverseComplete. isUnfolding:", props.isUnfolding, "isParentAnimating:", props.isParentAnimating);
+          // Only call parent's onAnimationComplete if it was an actual fold animation sequence
+          if (!props.isUnfolding && props.isParentAnimating) {
             props.onAnimationComplete();
+          }
         },
         onError: (e) => {
             console.error("PaperMesh GSAP: Error in timeline", e);
         }
-    });
+      });
 
-    console.log("PaperMesh Effect: GSAP timeline created.");
+      // --- Define animation from FOLDED to UNFOLDED ---
+      // Position segments for pivot points at their edges (only needs to be done once when segments are defined)
+      segments.tlSeg.position.set(-QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.02);
+      segments.blSeg.position.set(-QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
+      segments.trSeg.position.set(QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.01);
+      segments.brSeg.position.set(QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
 
-    // Step 1: Unfold top segments (TL and TR)
-    tl.current.to([segments.tlSeg.rotation, segments.trSeg.rotation], {
-      x: 0, 
-      duration: FOLD_ANIMATION_DURATION,
-      ease: 'power3.inOut',
-      stagger: 0.05,
-    }, "+=0.1"); 
-    // Adjust positions back as they unfold
-    tl.current.to([segments.tlSeg.position, segments.trSeg.position], {
-        // Target Y is their original centered Y position relative to their direct parent
-        y: (idx) => idx === 0 ? HALF_PAPER_HEIGHT / 2 : HALF_PAPER_HEIGHT / 2, 
+      // Step 1: Unfold top segments (TL and TR)
+      tl.current.to([segments.tlSeg.rotation, segments.trSeg.rotation], {
+        x: 0,
         duration: FOLD_ANIMATION_DURATION,
         ease: 'power3.inOut',
         stagger: 0.05,
-    }, "<" );
+      }, "+=0.1");
+      tl.current.to([segments.tlSeg.position, segments.trSeg.position], {
+        y: HALF_PAPER_HEIGHT / 2,
+        duration: FOLD_ANIMATION_DURATION, // Corrected typo FAND_ to FOLD_
+        ease: 'power3.inOut',
+        stagger: 0.05,
+      }, "<");
 
-    // Step 2: Unfold the right group (TR+BR)
-    tl.current.to(rightFoldGroupRef.current.rotation, {
-      y: 0, 
-      duration: FOLD_ANIMATION_DURATION * 1.2, 
-      ease: 'power3.inOut',
-    });
-    tl.current.to(rightFoldGroupRef.current.position, {
-        x: 0, 
+      // Step 2: Unfold the right group (TR+BR)
+      tl.current.to(rightFoldGroupRef.current.rotation, {
+        y: 0,
+        duration: FOLD_ANIMATION_DURATION * 1.2,
+        ease: 'power3.inOut',
+      });
+      tl.current.to(rightFoldGroupRef.current.position, {
+        x: 0,
         z: 0,
         duration: FOLD_ANIMATION_DURATION * 1.2,
         ease: 'power3.inOut',
-    }, "<");
+      }, "<");
+    }
 
-  }, [segments, props.onAnimationComplete]);
+    // Set initial state or snap to state if timeline was just created (first mount or remount)
+    if (newTimelineInstanceCreated) {
+      if (props.isUnfolding && !props.isParentAnimating) {
+        // Target: UNFOLDED (likely a remount into an already open state)
+        console.log("PaperMesh Effect: Snapping to UNFOLDED state.");
+        gsap.set(segments.tlSeg.rotation, { x: 0 });
+        gsap.set(segments.trSeg.rotation, { x: 0 });
+        gsap.set(segments.tlSeg.position, { y: HALF_PAPER_HEIGHT / 2 });
+        gsap.set(segments.trSeg.position, { y: HALF_PAPER_HEIGHT / 2 });
+        gsap.set(rightFoldGroupRef.current.rotation, { y: 0 });
+        gsap.set(rightFoldGroupRef.current.position, { x: 0, z: 0 });
+        tl.current.seek(tl.current.duration()); // Go to end. onComplete will fire.
+      } else {
+        // Target: FOLDED (initial setup for an animation, or should be closed)
+        console.log("PaperMesh Effect: Setting to FOLDED state for animation or closed state.");
+        gsap.set(segments.tlSeg.rotation, { x: -Math.PI });
+        gsap.set(segments.trSeg.rotation, { x: -Math.PI });
+        gsap.set(segments.tlSeg.position, { y: segments.blSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.tlSeg.position.z });
+        gsap.set(segments.trSeg.position, { y: segments.brSeg.position.y + QUARTER_PAPER_HEIGHT, z: segments.trSeg.position.z });
+        gsap.set(rightFoldGroupRef.current.position, { x: -HALF_PAPER_WIDTH, y: 0, z: 0.005 });
+        gsap.set(rightFoldGroupRef.current.rotation, { y: -Math.PI });
+        tl.current.seek(0); // Go to start.
+      }
+    }
+  }, [segments, props.onAnimationComplete, props.isUnfolding, props.isParentAnimating]); // Added isParentAnimating
 
   useEffect(() => {
-    if (tl.current) {
-      if (props.isUnfolding) {
-        console.log("PaperMesh Effect: Playing unfolding animation.");
-        tl.current.play();
-      } else {
-        console.log("PaperMesh Effect: Reversing folding animation.");
-        tl.current.timeScale(1.5).reverse(0);
-      }
-    } else {
-        console.log("PaperMesh Effect: GSAP timeline (tl.current) not available for play/reverse.");
+    if (!tl.current) {
+      console.log("PaperMesh AnimationControl: Timeline not ready for play/reverse.");
+      return;
     }
-  }, [props.isUnfolding]);
+    // console.log("PaperMesh AnimationControl: props.isUnfolding:", props.isUnfolding, "progress:", tl.current.progress(), "isActive:", tl.current.isActive());
+
+    if (props.isUnfolding) { // Target state is OPEN
+      if (tl.current.progress() < 1 && !tl.current.isActive()) {
+        console.log("PaperMesh AnimationControl: Playing unfold animation.");
+        tl.current.play();
+      }
+    } else { // Target state is CLOSED
+      if (tl.current.progress() > 0 && !tl.current.isActive()) {
+        console.log("PaperMesh AnimationControl: Playing fold animation (reverse).");
+        tl.current.timeScale(1.5).reverse();
+      }
+    }
+  }, [props.isUnfolding]); // This effect solely depends on the target state
 
   if (!segments) {
     console.log("PaperMesh Render: No segments to render. Returning fallback or null.");
     return <mesh><planeGeometry args={[1,1]} /><meshBasicMaterial color="red" wireframe /></mesh>; // Fallback if no segments
   } 
 
-  console.log("PaperMesh Render: Rendering segments.");
+  // console.log("PaperMesh Render: Rendering segments.");
+
+  const characters = useMemo(() => props.message.split(''), [props.message]);
+  const FONT_SIZE = 0.16; // Reduced font size
+  const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.5; // Adjusted char width estimate
+  const LINE_HEIGHT = FONT_SIZE * 1.2;
+  const totalEstimatedWidth = characters.length * ESTIMATED_CHAR_WIDTH;
+
+  // Effect to reset refs and count when message changes
+  useEffect(() => {
+    console.log("PaperMesh TextInit: Message changed, resetting refs state.");
+    charRefs.current = new Array(characters.length).fill(null);
+    setPopulatedRefsCount(0);
+  }, [characters]); // Use memoized characters array
+
+  useEffect(() => {
+    console.log("PaperMesh TextAnim: Evaluating. Visible:", props.isTextVisible, "Refs Populated:", populatedRefsCount, "Expected:", characters.length);
+    
+    // Get valid targets once, upfront.
+    const validTargets = charRefs.current.filter(Boolean) as THREE.Mesh[];
+
+    if (props.isTextVisible && populatedRefsCount === characters.length && characters.length > 0) {
+      if (validTargets.length !== characters.length) {
+        // This case should ideally not be hit if populatedRefsCount is accurate
+        console.warn("PaperMesh TextAnim: Mismatch between populatedRefsCount and actual valid targets. Aborting animation.");
+        return;
+      }
+      console.log("PaperMesh TextAnim: Animating IN", validTargets.length, "letters.");
+
+      validTargets.forEach((target, index) => {
+        if (target.material) {
+          // Ensure material is an object and not an array (usually not for Text)
+          const material = Array.isArray(target.material) ? target.material[0] : target.material;
+          if (material) {
+            material.transparent = true; // ESSENTIAL for opacity to work
+            
+            // Set initial state
+            gsap.set(material, { opacity: 0 });
+            gsap.set(target.position, { y: LINE_HEIGHT * 0.7 }); // Start from above
+            gsap.set(target.scale, { x: 0.5, y: 0.5, z: 0.5 });
+            gsap.set(target.rotation, { z: (Math.random() - 0.5) * Math.PI * 0.3 }); // Random initial tilt
+
+            // Animate to final state
+            gsap.to(material, {
+              opacity: 1,
+              duration: 0.5, // Slightly faster opacity
+              ease: 'power2.inOut',
+              delay: index * 0.05, // Stagger animation
+            });
+            gsap.to(target.position, {
+              y: 0,
+              duration: 0.7,
+              ease: 'back.out(1.4)',
+              delay: index * 0.05,
+            });
+            gsap.to(target.scale, {
+              x: 1,
+              y: 1,
+              z: 1,
+              duration: 0.7,
+              ease: 'back.out(1.4)',
+              delay: index * 0.05,
+            });
+            gsap.to(target.rotation, {
+              z: 0,
+              duration: 0.7,
+              ease: 'elastic.out(1, 0.75)',
+              delay: index * 0.05,
+            });
+          } else {
+            console.warn("PaperMesh TextAnim: Material not found for target index", index);
+          }
+        } else {
+          console.warn("PaperMesh TextAnim: Target or material not found for index", index);
+        }
+      });
+    } else if (!props.isTextVisible && validTargets.length > 0 && characters.length > 0) { // Check validTargets here
+      console.log("PaperMesh TextAnim: Setting text to invisible (props.isTextVisible is false).");
+      validTargets.forEach(target => {
+        if (target.material) {
+          const material = Array.isArray(target.material) ? target.material[0] : target.material;
+          if (material) {
+            gsap.set(material, { opacity: 0 });
+          }
+        }
+      });
+    }
+  }, [props.isTextVisible, populatedRefsCount, characters, LINE_HEIGHT]); // Added characters to dependencies
 
   return (
     <group ref={mainGroupRef}>
@@ -197,6 +304,41 @@ const PaperMesh = (props: { message: string; textureUrl?: string; isUnfolding: b
             <primitive object={segments.trSeg} />
             <primitive object={segments.brSeg} />
         </group>
+        
+        {/* Animated Text: Renders each character individually */} 
+        {props.isTextVisible && (
+          <Suspense fallback={null}> {/* Inner Suspense for Text only */}
+            <group position={[-totalEstimatedWidth / 2, 0, 0.03]}> {/* Center the block of text */}
+              {characters.map((char, index) => (
+                <Text
+                  key={`${char}-${index}`}
+                  ref={(el: THREE.Mesh | null) => {
+                    // Only update if the ref instance actually changes to avoid potential loops
+                    if (el && charRefs.current[index] !== el) {
+                      charRefs.current[index] = el;
+                      setPopulatedRefsCount(prev => prev + 1);
+                    } else if (!el && charRefs.current[index]) {
+                      // This part handles cleanup if a Text component unmounts and its ref becomes null
+                      // For this app, characters don't dynamically unmount often, but good for robustness
+                      charRefs.current[index] = null;
+                      setPopulatedRefsCount(prev => prev - 1); // Should be paired with re-initialization logic if characters change
+                    }
+                  }}
+                  fontSize={FONT_SIZE}
+                  color="black"
+                  anchorX="left"
+                  anchorY="middle" 
+                  position={[index * ESTIMATED_CHAR_WIDTH, 0, 0]} // Position each letter horizontally
+                  // Set initial opacity to 0 to avoid flash before GSAP takes control if needed
+                  // However, GSAP.set in useEffect should handle this if timed correctly.
+                  // material-opacity={0} // Alternative way to set initial opacity if GSAP set is too slow
+                >
+                  {char}
+                </Text>
+              ))}
+            </group>
+          </Suspense>
+        )}
     </group>
   );
 };
@@ -232,7 +374,7 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
     onClose(); 
   };
   
-  const handleAnimationComplete = () => {
+  const handleAnimationComplete = useCallback(() => {
     console.log(`UnfoldingPaper: handleAnimationComplete. isOpen: ${isOpen}`);
     if (isOpen) {
         setIsAnimating(false);
@@ -242,7 +384,7 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
         setIsAnimating(false); // Done closing
         console.log("UnfoldingPaper: Now fully closed and not animating.");
     }
-  };
+  }, [isOpen]);
   
   console.log(`UnfoldingPaper Render: isOpen: ${isOpen}, isAnimating: ${isAnimating}, isFullyOpen: ${isFullyOpen}`);
 
@@ -282,16 +424,18 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
             <details><summary>Details</summary><pre>{errorInfo?.componentStack}</pre></details>
           </div>
         )}>
-          <Canvas camera={{ position: [0, 0, 6], fov: 50 }}> {/* Zoomed out slightly */}
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[2, 3, 5]} intensity={1.0} />
-            <directionalLight position={[-2, 3, -5]} intensity={0.5} /> {/* Added another light */}
+          <Canvas camera={{ position: [0, 0, 5], fov: 50 }}> {/* Adjusted camera Z from 6 to 5 */}
+            <ambientLight intensity={0.8} /> {/* Slightly increased ambient light */}
+            <directionalLight position={[2, 3, 5]} intensity={1.2} /> {/* Slightly increased main light */}
+            <directionalLight position={[-2, -2, 4]} intensity={0.6} /> {/* Adjusted secondary light */}
             <Suspense fallback={ <mesh><planeGeometry /><meshBasicMaterial color="blue" wireframeLinewidth={3} /></mesh> /* Basic fallback for Suspense */ }>
               <PaperMesh 
                 message={message} 
-                isUnfolding={isOpen}
+                isUnfolding={isOpen || isFullyOpen} 
+                isTextVisible={isFullyOpen && isOpen} 
+                isParentAnimating={isAnimating} // Pass isAnimating state here
                 onAnimationComplete={handleAnimationComplete}
-                textureUrl="/textures/@Generated Image May 21, 2025 - 3_47PM.jpg"
+                textureUrl="/textures/Generated Image May 21, 2025 - 3_47PM.jpg"
               />
             </Suspense>
           </Canvas>
@@ -316,28 +460,7 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
             >
               &times;
             </button>
-            {/* HTML text overlay for now - will be replaced by text on 3D paper */}
-            <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                color: 'black',
-                backgroundColor: 'rgba(255,255,255,0.8)',
-                padding: '20px',
-                borderRadius: '10px',
-                textAlign: 'center',
-                width: '85%',
-                maxWidth: 'calc(100% - 40px)', 
-                maxHeight: '80%',
-                overflowY: 'auto',
-                pointerEvents: 'none',
-                zIndex: 202,
-                boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-            }}>
-                <h2 style={{fontSize: 'clamp(1.1em, 4vw, 1.5em)', marginBottom: '15px', fontWeight: 'bold', color: '#333'}}>A Special Note:</h2>
-                <p style={{fontSize: 'clamp(0.9em, 3.5vw, 1.2em)', lineHeight: '1.7', color: '#444'}}>{message}</p>
-            </div>
+            {/* HTML text overlay is now REMOVED */}
           </>
         )}
       </div>
