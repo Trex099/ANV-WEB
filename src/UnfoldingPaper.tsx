@@ -329,6 +329,7 @@ const PaperMesh = (props: {
                   anchorX="left"
                   anchorY="middle" 
                   position={[index * ESTIMATED_CHAR_WIDTH, 0, 0]} // Position each letter horizontally
+                  font="/fonts/ARIAL.TTF" // Using ARIA.TTF, ensure this file exists in public/fonts/
                   // Set initial opacity to 0 to avoid flash before GSAP takes control if needed
                   // However, GSAP.set in useEffect should handle this if timed correctly.
                   // material-opacity={0} // Alternative way to set initial opacity if GSAP set is too slow
@@ -435,7 +436,7 @@ const UnfoldingPaper: React.FC<UnfoldingPaperProps> = ({ message, onClose, isOpe
                 isTextVisible={isFullyOpen && isOpen} 
                 isParentAnimating={isAnimating} // Pass isAnimating state here
                 onAnimationComplete={handleAnimationComplete}
-                textureUrl="/textures/Generated Image May 21, 2025 - 3_47PM.jpg"
+                textureUrl="/textures/paper-texture.jpg" // Updated texture path
               />
             </Suspense>
           </Canvas>
