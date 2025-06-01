@@ -17,7 +17,21 @@ const App = () => {
     <div className="w-full min-h-screen flex flex-col select-none" aria-live="polite">
       {/* Top Interactive Bowl Section: h-screen and flex-shrink-0 to prevent shrinking */}
       <div className="relative w-full h-screen flex-shrink-0">
-        <InteractiveBowlSection />
+        {/* Spline Diamond Heart Background */}
+        <div className="absolute inset-0 w-full h-full overflow-hidden z-0 pointer-events-none">
+          <iframe 
+            src='https://my.spline.design/diamondheart-hbQN0gppfiSZommAeSl9XaMX/' 
+            frameBorder='0' 
+            width='100%' 
+            height='100%'
+            title="Diamond Heart Background"
+            className="absolute inset-0 w-full h-full"
+            style={{ pointerEvents: 'none' }}
+          />
+        </div>
+        <div className="relative z-10 w-full h-full"> {/* Wrapper to ensure bowl appears above background */}
+          <InteractiveBowlSection />
+        </div>
       </div>
 
       {/* Divider: Normal flow, with minimal vertical margin */}
