@@ -214,21 +214,59 @@ const PaperMesh = (props: {
   const FONT_SIZE = 0.16;
   const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.48; // Adjusted for tighter spacing
   const LINE_HEIGHT = FONT_SIZE * 1.2;
-  // Calculate total width to center properly
-  const totalEstimatedWidth = characters.length * ESTIMATED_CHAR_WIDTH;
   
-  // Calculate each character's position, centered on paper
-  const characterPositions = useMemo(() => {
-    const positions: number[] = []; // Explicitly type the array as number[]
-    const totalWidth = characters.length * ESTIMATED_CHAR_WIDTH;
-    const startX = -totalWidth / 2; // Start at left edge of centered block
+  // Text wrapping logic - calculate lines and character positions
+  const { lines, characterMetrics } = useMemo(() => {
+    // Determine max chars per line based on paper width (with some margin)
+    const maxLineWidth = PAPER_WIDTH * 0.85; // 85% of paper width for margins
+    const maxCharsPerLine = Math.floor(maxLineWidth / ESTIMATED_CHAR_WIDTH);
     
-    for (let i = 0; i < characters.length; i++) {
-      positions.push(startX + (i + 0.5) * ESTIMATED_CHAR_WIDTH); // +0.5 to center each char in its space
+    // Split message into words
+    const words = props.message.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    
+    // Simple word wrapping algorithm
+    words.forEach(word => {
+      const potentialLine = currentLine ? `${currentLine} ${word}` : word;
+      if (potentialLine.length <= maxCharsPerLine) {
+        currentLine = potentialLine;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    });
+    
+    // Add the last line
+    if (currentLine) {
+      lines.push(currentLine);
     }
-    return positions;
-  }, [characters, ESTIMATED_CHAR_WIDTH]);
-
+    
+    // Calculate character metrics (which line and position within that line)
+    const characterMetrics: {lineIndex: number; charIndexInLine: number; xPosition: number; yPosition: number}[] = [];
+    let charCounter = 0;
+    
+    lines.forEach((line, lineIndex) => {
+      // Center each line
+      const lineWidth = line.length * ESTIMATED_CHAR_WIDTH;
+      const lineStartX = -lineWidth / 2;
+      const lineYPosition = (lines.length - 1) / 2 * -LINE_HEIGHT + lineIndex * LINE_HEIGHT;
+      
+      // Process each character in the line
+      for (let i = 0; i < line.length; i++) {
+        characterMetrics.push({
+          lineIndex,
+          charIndexInLine: i,
+          xPosition: lineStartX + (i + 0.5) * ESTIMATED_CHAR_WIDTH, // Center each character in its space
+          yPosition: lineYPosition
+        });
+        charCounter++;
+      }
+    });
+    
+    return { lines, characterMetrics };
+  }, [props.message, ESTIMATED_CHAR_WIDTH]);
+  
   // RESTORED: Effect to reset refs and count when message changes
   useEffect(() => {
     console.log("[PaperMesh TextInit] Message changed or component mounted. Resetting char refs. Message length:", characters.length);
@@ -318,41 +356,61 @@ const PaperMesh = (props: {
         {props.isTextVisible && (
           <Suspense fallback={null}> {/* Inner Suspense for Text only */}
             <group position={[0, 0, 0.03]}> {/* Center directly on paper */}
-              {characters.map((char, index) => (
-                <Text
-                  key={`${char}-${index}-${props.message}`} // Ensure key is unique if message changes
-                  ref={(el: THREE.Mesh | null) => {
-                    const oldRef = charRefs.current[index];
-                    if (el && oldRef !== el) {
-                      console.log(`[PaperMesh TextRef] Assigning ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount + 1}`);
-                      charRefs.current[index] = el;
-                      // Atomically update count based on actual assignment
-                      setPopulatedRefsCount(prevCount => {
-                          // Recalculate based on current charRefs array state
-                          const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
-                          if(currentNonNullRefs > prevCount && el !== null) return prevCount +1; // only increment if it's a new valid ref
-                          return currentNonNullRefs; // Or simply recalculate always
-                      });
-                    } else if (!el && oldRef) {
-                      console.log(`[PaperMesh TextRef] Clearing ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount - 1}`);
-                      charRefs.current[index] = null;
-                       setPopulatedRefsCount(prevCount => {
-                           const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
-                           if (currentNonNullRefs < prevCount) return prevCount -1; // only decrement if a ref was cleared
-                           return currentNonNullRefs;
-                       });
-                    }
-                  }}
-                  fontSize={FONT_SIZE}
-                  color="black"
-                  anchorX="center" // Center each character horizontally
-                  anchorY="middle" 
-                  position={[characterPositions[index], 0, 0]} // Use pre-calculated positions
-                  font="/fonts/ARIAL.TTF" 
-                >
-                  {char}
-                </Text>
-              ))}
+              {characters.map((char, index) => {
+                // Skip rendering spaces - they don't need a mesh
+                if (char === ' ') {
+                  // Still need to populate the ref so our count is accurate
+                  if (charRefs.current[index] === undefined) {
+                    charRefs.current[index] = null;
+                    setPopulatedRefsCount(prev => prev + 1);
+                  }
+                  return null;
+                }
+                
+                // Check if we have metrics for this character
+                if (!characterMetrics[index]) {
+                  console.error(`No metrics found for character at index ${index}: '${char}'`);
+                  return null;
+                }
+                
+                const metrics = characterMetrics[index];
+                
+                return (
+                  <Text
+                    key={`${char}-${index}-${props.message}`} // Ensure key is unique if message changes
+                    ref={(el: THREE.Mesh | null) => {
+                      const oldRef = charRefs.current[index];
+                      if (el && oldRef !== el) {
+                        console.log(`[PaperMesh TextRef] Assigning ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount + 1}`);
+                        charRefs.current[index] = el;
+                        // Atomically update count based on actual assignment
+                        setPopulatedRefsCount(prevCount => {
+                            // Recalculate based on current charRefs array state
+                            const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
+                            if(currentNonNullRefs > prevCount && el !== null) return prevCount +1; // only increment if it's a new valid ref
+                            return currentNonNullRefs; // Or simply recalculate always
+                        });
+                      } else if (!el && oldRef) {
+                        console.log(`[PaperMesh TextRef] Clearing ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount - 1}`);
+                        charRefs.current[index] = null;
+                         setPopulatedRefsCount(prevCount => {
+                             const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
+                             if (currentNonNullRefs < prevCount) return prevCount -1; // only decrement if a ref was cleared
+                             return currentNonNullRefs;
+                         });
+                      }
+                    }}
+                    fontSize={FONT_SIZE}
+                    color="black"
+                    anchorX="center" // Center each character horizontally
+                    anchorY="middle" 
+                    position={[metrics.xPosition, metrics.yPosition, 0]} // Use metrics for positioning
+                    font="/fonts/ARIAL.TTF" 
+                  >
+                    {char}
+                  </Text>
+                );
+              })}
             </group>
           </Suspense>
         )}
