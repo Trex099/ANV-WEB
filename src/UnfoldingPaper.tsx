@@ -52,6 +52,7 @@ const PaperMesh = (props: {
 }) => {
   const mainGroupRef = useRef<THREE.Group>(null!); 
   const rightFoldGroupRef = useRef<THREE.Group>(null!); 
+  const textLineRefs = useRef<(THREE.Mesh | null)[]>([]);
   
   const texture = useMemo(() => {
     try {
@@ -233,8 +234,74 @@ const PaperMesh = (props: {
       lines.push(currentLine);
     }
     
+    // Initialize or resize the refs array when lines change
+    if (textLineRefs.current.length !== lines.length) {
+      textLineRefs.current = new Array(lines.length).fill(null);
+    }
+    
     return lines;
   }, [props.message]);
+
+  // Effect to animate text appearance
+  useEffect(() => {
+    if (props.isTextVisible) {
+      // Get all valid text line refs
+      const validTextRefs = textLineRefs.current.filter(Boolean) as THREE.Mesh[];
+      
+      if (validTextRefs.length === textLines.length && textLines.length > 0) {
+        console.log(`Animating ${validTextRefs.length} text lines to appear`);
+        
+        validTextRefs.forEach((mesh, index) => {
+          if (mesh && mesh.material) {
+            const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+            if (material) {
+              // Set initial state
+              material.transparent = true;
+              gsap.set(material, { opacity: 0 });
+              gsap.set(mesh.position, { z: -0.02 }); // Start slightly below paper surface
+              gsap.set(mesh.scale, { x: 0.95, y: 0.95, z: 0.95 });
+              
+              // Animate to visible state with a slight delay based on line position
+              gsap.to(material, { 
+                opacity: 1, 
+                duration: 0.8, 
+                delay: 0.1 + (index * 0.1),
+                ease: 'power2.out' 
+              });
+              
+              gsap.to(mesh.position, { 
+                z: 0, 
+                duration: 0.8, 
+                delay: 0.1 + (index * 0.1),
+                ease: 'power2.out' 
+              });
+              
+              gsap.to(mesh.scale, { 
+                x: 1, 
+                y: 1, 
+                z: 1, 
+                duration: 0.8, 
+                delay: 0.1 + (index * 0.1),
+                ease: 'power2.out' 
+              });
+            }
+          }
+        });
+      }
+    } else {
+      // Make text invisible when not shown
+      const validTextRefs = textLineRefs.current.filter(Boolean) as THREE.Mesh[];
+      validTextRefs.forEach(mesh => {
+        if (mesh && mesh.material) {
+          const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+          if (material) {
+            material.transparent = true;
+            gsap.set(material, { opacity: 0 });
+          }
+        }
+      });
+    }
+  }, [props.isTextVisible, textLines]);
 
   // Calculate the line height and starting Y position for text block
   const FONT_SIZE = 0.16;
@@ -250,14 +317,15 @@ const PaperMesh = (props: {
             <primitive object={segments.brSeg} />
         </group>
         
-        {/* Simple Text: One Text component per line */} 
+        {/* Simple Text with smooth appearance animation */} 
         {props.isTextVisible && (
           <Suspense fallback={null}>
             <group position={[0, 0, 0.03]}>
               {textLines.map((line, index) => (
                 <Text
                   key={`line-${index}`}
-                  fontSize={0.16}
+                  ref={(el) => { textLineRefs.current[index] = el; }}
+                  fontSize={FONT_SIZE}
                   color="black"
                   anchorX="center"
                   anchorY="middle"
