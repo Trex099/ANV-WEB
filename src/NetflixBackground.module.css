@@ -1,0 +1,135 @@
+/* src/NetflixBackground.module.css */
+
+.netflixBackground {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #141414; /* Netflix-like dark background */
+  z-index: -1; /* Ensure it's behind other content */
+}
+
+.perspectiveContainer {
+  width: 100%;
+  height: 100%;
+  perspective: 1200px; /* Increased perspective for more depth with less tilt */
+  transform-style: preserve-3d;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.gridContainer {
+  width: 140%; /* Adjusted width */
+  height: 140%; /* Adjusted height */
+  transform-style: preserve-3d;
+  /* Reduced rotateX significantly, adjusted translateY and scale */
+  transform: rotateX(25deg) translateY(-10%) scale(1); 
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Slightly increased gap between rows */
+}
+
+.posterRow {
+  display: flex;
+  transform-style: preserve-3d;
+  gap: 15px; /* Slightly increased gap between posters */
+}
+
+.posterRow:nth-child(even) {
+  /* Adjusted staggering to work with new perspective */
+  /* This will now be primarily handled by the inline style in the TSX for Z-translation */
+}
+
+.posterItem {
+  width: 180px; 
+  height: 270px; 
+  flex-shrink: 0; 
+  background-size: cover;
+  background-position: center;
+  border-radius: 6px;
+  opacity: 0.4; 
+  box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.6);
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+  position: relative; 
+}
+
+.posterItem:hover {
+  opacity: 0.8;
+  transform: scale(1.05) translateZ(30px); /* Increased lift on hover */
+  box-shadow: 0px 8px 25px rgba(0, 0, 0, 0.7);
+}
+
+.posterRow.scrollLeft {
+  animation: scrollLeftAnimation 150s linear infinite; /* Slightly slower animation */
+}
+
+.posterRow.scrollRight {
+  animation: scrollRightAnimation 150s linear infinite; /* Slightly slower animation */
+}
+
+@keyframes scrollLeftAnimation {
+  0% {
+    transform: translateX(0px); 
+  }
+  100% {
+    transform: translateX(-1200px); /* Adjusted distance */
+  }
+}
+
+@keyframes scrollRightAnimation {
+  0% {
+    transform: translateX(0px); /* Start from base position if staggering is mostly Z based */
+  }
+  100% {
+    transform: translateX(1200px); /* Adjusted distance */
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .perspectiveContainer {
+    perspective: 1000px;
+  }
+  .gridContainer {
+    transform: rotateX(30deg) translateY(-8%) scale(0.9);
+    gap: 10px;
+  }
+  .posterRow {
+    gap: 10px;
+  }
+  .posterItem {
+    width: 120px;
+    height: 180px;
+    opacity: 0.5;
+  }
+  @keyframes scrollLeftAnimation {
+    100% { transform: translateX(-800px); }
+  }
+  @keyframes scrollRightAnimation {
+    100% { transform: translateX(800px); }
+  }
+}
+
+@media (max-width: 480px) {
+  .perspectiveContainer {
+    perspective: 800px;
+  }
+  .gridContainer {
+    transform: rotateX(35deg) translateY(-5%) scale(0.8);
+  }
+  .posterItem {
+    width: 90px;
+    height: 135px;
+    opacity: 0.6;
+  }
+   @keyframes scrollLeftAnimation {
+    100% { transform: translateX(-600px); }
+  }
+  @keyframes scrollRightAnimation {
+    100% { transform: translateX(600px); }
+  }
+} 

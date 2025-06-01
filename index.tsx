@@ -1,6 +1,6 @@
 import React from 'react';
 import InteractiveBowlSection from './src/InteractiveBowlSection'; // Adjusted path
-import ImageGridBackground from './src/ImageGridBackground'; // Import the new component
+import NetflixBackground from './src/NetflixBackground'; // Changed from ImageGridBackground
 
 // No longer needed here: createRoot, useState, useEffect, useRef, useCallback
 // No longer needed here: All constants, interfaces, and functions related to the bowl interaction
@@ -16,7 +16,9 @@ const App = () => {
   return (
     <>
       {/* Netflix-style background positioned behind everything */}
-      <ImageGridBackground />
+      {/* You can pass your array of image URLs here */}
+      {/* e.g., <NetflixBackground imageUrls={yourImageArray} /> */}
+      <NetflixBackground />
       
       <div className="w-full min-h-screen flex flex-col select-none relative" aria-live="polite">
         {/* Top Interactive Bowl Section: h-screen and flex-shrink-0 to prevent shrinking */}
