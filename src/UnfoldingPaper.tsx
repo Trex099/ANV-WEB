@@ -276,105 +276,101 @@ const PaperMesh = (props: {
     });
   }, [props.isTextVisible, populatedRefsCount, characters, glyphLayouts, LINE_HEIGHT, FONT_SIZE]);
 
-  // Pass 1: Render invisible Text to calculate layout if not already done
-  if (props.isTextVisible && !glyphLayouts && props.message) {
-    // console.log("[PaperMesh Render] Pass 1: Calculating glyph layouts for message:", props.message);
-    return (
-      <Text
-        fontSize={FONT_SIZE}
-        font="/fonts/ARIAL.TTF"
-        anchorX="left" 
-        anchorY="middle"
-        onSync={(troikaMesh: any) => { // Simplified type for troikaMesh to any for now
-          if (troikaMesh && troikaMesh.textRenderInfo && troikaMesh.textRenderInfo.visibleGlyphs) {
-            const computedLayouts = troikaMesh.textRenderInfo.visibleGlyphs.map((glyph: any, index: number) => ({
-              x: glyph.x,
-              width: glyph.xAdvance, 
-              char: props.message[glyph.charIndex] || characters[index], 
-            }));
-            // console.log('[PaperMesh LayoutCalculator] Layouts computed:', computedLayouts);
-            if (props.message === characters.join('')) { 
-              setGlyphLayouts(computedLayouts);
-            } else {
-              // console.warn('[PaperMesh LayoutCalculator] Message changed during layout calculation. Layouts discarded.');
-            }
-          } else {
-            console.warn('[PaperMesh LayoutCalculator] onSync called but no textRenderInfo or visibleGlyphs found on troikaMesh.', troikaMesh);
-          }
-        }}
-        visible={false} 
-      >
-        {props.message} 
-      </Text>
-    );
-  }
-
-  // If layouts are not ready OR text is not supposed to be visible yet, don't render characters.
-  if (!glyphLayouts || !props.isTextVisible) {
-    // console.log(`[PaperMesh Render] Not rendering characters. GlyphLayouts: ${!!glyphLayouts}, Visible: ${props.isTextVisible}`);
-    return null; 
+  // Fallback if segments (the paper pieces themselves) aren't ready.
+  if (!segments) {
+    console.warn("[PaperMesh Render] Segments not ready. Rendering fallback.");
+    return <mesh><planeGeometry args={[1,1]} /><meshBasicMaterial color="red" wireframe /></mesh>;
   }
   
-  // Calculate total width for centering the group
+  // Calculate total width for centering the group if layouts are available
   let totalTextWidth = 0;
-  if (glyphLayouts.length > 0) {
+  if (glyphLayouts && glyphLayouts.length > 0) {
     const firstGlyphX = glyphLayouts[0].x;
     const lastGlyph = glyphLayouts[glyphLayouts.length - 1];
     totalTextWidth = (lastGlyph.x + lastGlyph.width) - firstGlyphX;
   }
-  // console.log("[PaperMesh Render] Pass 2: Rendering visible characters. Total calculated width:", totalTextWidth);
+
+  // console.log(`[PaperMesh Render] glyphLayouts: ${glyphLayouts ? ' vorhanden' : 'nicht vorhanden'}, props.isTextVisible: ${props.isTextVisible}`);
 
   return (
     <group ref={mainGroupRef}>
+        {/* Paper Segments - These should always be part of the scene if PaperMesh is rendered */} 
         <primitive object={segments.tlSeg} />
         <primitive object={segments.blSeg} />
         <group ref={rightFoldGroupRef}>
             <primitive object={segments.trSeg} />
             <primitive object={segments.brSeg} />
         </group>
-        
-        {/* Animated Text: Renders each character individually using precise layout */}
-        {/* props.isTextVisible is already checked above, glyphLayouts implies visibility check too */}
-        <Suspense fallback={null}>
-          <group position={[-totalTextWidth / 2, 0, 0.03]}> {/* Center the block of text */}
-            {characters.map((char, index) => {
-              if (!glyphLayouts[index]) { // Should not happen if logic is correct
-                console.warn(`[PaperMesh Render] Missing glyphLayout for char '${char}' at index ${index}`);
-                return null;
+
+        {/* Pass 1: Render invisible Text to calculate layout if not already done and text should be visible */}
+        {props.isTextVisible && !glyphLayouts && props.message && (
+          <Text
+            fontSize={FONT_SIZE}
+            font="/fonts/ARIAL.TTF"
+            anchorX="left" 
+            anchorY="middle"
+            onSync={(troikaMesh: any) => { 
+              if (troikaMesh && troikaMesh.textRenderInfo && troikaMesh.textRenderInfo.visibleGlyphs) {
+                const computedLayouts = troikaMesh.textRenderInfo.visibleGlyphs.map((glyph: any, index: number) => ({
+                  x: glyph.x,
+                  width: glyph.xAdvance, 
+                  char: props.message[glyph.charIndex] || characters[index], 
+                }));
+                if (props.message === characters.join('')) { 
+                  setGlyphLayouts(computedLayouts);
+                } else {
+                  // console.warn('[PaperMesh LayoutCalculator] Message changed during layout. Discarded.');
+                }
+              } else {
+                // console.warn('[PaperMesh LayoutCalculator] onSync: no textRenderInfo/visibleGlyphs.', troikaMesh);
               }
-              const layout = glyphLayouts[index];
-              return (
-                <Text
-                  key={`${char}-${index}-${props.message}`} 
-                  ref={(el: THREE.Mesh | null) => {
-                    // Ensure ref handling is robust
-                    if (charRefs.current.length > index) { // Check if array is sized
-                        const oldRef = charRefs.current[index];
-                        if (el && oldRef !== el) {
-                            charRefs.current[index] = el;
-                            setPopulatedRefsCount(prev => prev + 1);
-                        } else if (!el && oldRef) {
-                            charRefs.current[index] = null;
-                            // Decrementing count can be tricky if refs are cleared then re-added rapidly.
-                            // Relying on reset when message changes, and incrementing new refs.
-                            // A full recount might be safer if issues persist:
-                            // setPopulatedRefsCount(charRefs.current.filter(r => r !== null).length);
-                        }
-                    }
-                  }}
-                  fontSize={FONT_SIZE}
-                  color="black"
-                  anchorX="left" // Each char is anchored left, positioned by its layout.x
-                  anchorY="middle" 
-                  position={[layout.x, 0, 0]} // Use precise X from layout
-                  font="/fonts/ARIAL.TTF" 
-                >
-                  {char}
-                </Text>
-              );
-            })}
-          </group>
-        </Suspense>
+            }}
+            visible={false} 
+          >
+            {props.message} 
+          </Text>
+        )}
+
+        {/* Pass 2: Render visible, animated characters if layouts are ready and text should be visible */}
+        {props.isTextVisible && glyphLayouts && characters.length > 0 && (
+          <Suspense fallback={null}>
+            <group position={[-totalTextWidth / 2, 0, 0.03]}> {/* Center the block of text */}
+              {characters.map((char, index) => {
+                if (!glyphLayouts || !glyphLayouts[index]) { 
+                  // console.warn(`[PaperMesh Render] Missing glyphLayout for char '${char}' at index ${index}`);
+                  return null;
+                }
+                const layout = glyphLayouts[index];
+                return (
+                  <Text
+                    key={`${char}-${index}-${props.message}`} 
+                    ref={(el: THREE.Mesh | null) => {
+                      if (charRefs.current.length > index) { 
+                          const oldRef = charRefs.current[index];
+                          if (el && oldRef !== el) {
+                              charRefs.current[index] = el;
+                              setPopulatedRefsCount(prev => prev + 1);
+                          } else if (!el && oldRef) {
+                              charRefs.current[index] = null;
+                              // This ensures count is accurate if a ref is cleared then re-added
+                              setPopulatedRefsCount(prev => Math.max(0, prev -1)); 
+                          }
+                      }
+                    }}
+                    fontSize={FONT_SIZE}
+                    color="black"
+                    anchorX="left" 
+                    anchorY="middle" 
+                    position={[layout.x, 0, 0]} 
+                    font="/fonts/ARIAL.TTF" 
+                  >
+                    {char}
+                  </Text>
+                );
+              })}
+            </group>
+          </Suspense>
+        )}
     </group>
   );
 };
