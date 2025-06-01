@@ -53,6 +53,8 @@ const PaperMesh = (props: {
   const mainGroupRef = useRef<THREE.Group>(null!); 
   const rightFoldGroupRef = useRef<THREE.Group>(null!); 
   const textLineRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const [refsReady, setRefsReady] = useState(false);
+  const hasRunAnimation = useRef(false);
   
   const texture = useMemo(() => {
     try {
@@ -208,6 +210,10 @@ const PaperMesh = (props: {
 
   // Simple text wrapping logic - calculate lines
   const textLines = useMemo(() => {
+    // Reset animation tracking when message changes
+    hasRunAnimation.current = false;
+    setRefsReady(false);
+    
     // Determine max chars per line based on paper width (with some margin)
     const FONT_SIZE = 0.16;
     const maxLineWidth = PAPER_WIDTH * 0.85; // 85% of paper width for margins
@@ -235,22 +241,38 @@ const PaperMesh = (props: {
     }
     
     // Initialize or resize the refs array when lines change
-    if (textLineRefs.current.length !== lines.length) {
-      textLineRefs.current = new Array(lines.length).fill(null);
-    }
+    textLineRefs.current = new Array(lines.length).fill(null);
     
     return lines;
   }, [props.message]);
 
-  // Effect to animate text appearance
+  // Effect to check if refs are ready
   useEffect(() => {
     if (props.isTextVisible) {
+      // Check if all expected refs are populated
+      const filledRefs = textLineRefs.current.filter(Boolean);
+      if (filledRefs.length === textLines.length && textLines.length > 0) {
+        console.log("All text line refs are ready now.");
+        setRefsReady(true);
+      } else {
+        console.log(`Refs not fully ready yet. Got ${filledRefs.length}/${textLines.length} refs.`);
+      }
+    }
+  }, [props.isTextVisible, textLines, textLineRefs.current]);
+
+  // Effect to animate text appearance - runs when refs are confirmed ready
+  useEffect(() => {
+    if (props.isTextVisible && refsReady && !hasRunAnimation.current) {
+      console.log("Text animation running with ready refs");
+      
+      // Mark as run so we don't re-run on the same visible instance
+      hasRunAnimation.current = true;
+      
       // Get all valid text line refs
       const validTextRefs = textLineRefs.current.filter(Boolean) as THREE.Mesh[];
       
-      if (validTextRefs.length === textLines.length && textLines.length > 0) {
-        console.log(`Animating ${validTextRefs.length} text lines to appear`);
-        
+      // Set a short timeout to ensure refs are fully populated in the DOM
+      setTimeout(() => {
         validTextRefs.forEach((mesh, index) => {
           if (mesh && mesh.material) {
             const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
@@ -287,8 +309,12 @@ const PaperMesh = (props: {
             }
           }
         });
-      }
-    } else {
+      }, 100); // Small delay to ensure DOM is ready
+    } else if (!props.isTextVisible) {
+      // Reset animation flag when text is hidden
+      hasRunAnimation.current = false;
+      setRefsReady(false);
+      
       // Make text invisible when not shown
       const validTextRefs = textLineRefs.current.filter(Boolean) as THREE.Mesh[];
       validTextRefs.forEach(mesh => {
@@ -301,7 +327,7 @@ const PaperMesh = (props: {
         }
       });
     }
-  }, [props.isTextVisible, textLines]);
+  }, [props.isTextVisible, refsReady, textLines]);
 
   // Calculate the line height and starting Y position for text block
   const FONT_SIZE = 0.16;
@@ -323,8 +349,17 @@ const PaperMesh = (props: {
             <group position={[0, 0, 0.03]}>
               {textLines.map((line, index) => (
                 <Text
-                  key={`line-${index}`}
-                  ref={(el) => { textLineRefs.current[index] = el; }}
+                  key={`line-${index}-${props.message}`} // Ensure keys are unique when message changes
+                  ref={(el) => { 
+                    if (el !== textLineRefs.current[index]) {
+                      textLineRefs.current[index] = el; 
+                      // Force a check for ref readiness
+                      const filledRefs = textLineRefs.current.filter(Boolean);
+                      if (filledRefs.length === textLines.length) {
+                        setRefsReady(true);
+                      }
+                    }
+                  }}
                   fontSize={FONT_SIZE}
                   color="black"
                   anchorX="center"
