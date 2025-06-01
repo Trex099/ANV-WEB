@@ -1,0 +1,6 @@
+This directory is for background images.
+
+Place your custom background images here with filenames:
+background-1.jpg, background-2.jpg, etc.
+
+See README.md for more details. 

@@ -1,5 +1,6 @@
 import React from 'react';
 import InteractiveBowlSection from './src/InteractiveBowlSection'; // Adjusted path
+import ImageGridBackground from './src/ImageGridBackground'; // Import the new component
 
 // No longer needed here: createRoot, useState, useEffect, useRef, useCallback
 // No longer needed here: All constants, interfaces, and functions related to the bowl interaction
@@ -16,6 +17,9 @@ const App = () => {
     <div className="w-full min-h-screen flex flex-col select-none" aria-live="polite">
       {/* Top Interactive Bowl Section: h-screen and flex-shrink-0 to prevent shrinking */}
       <div className="relative w-full h-screen flex-shrink-0">
+        {/* Image Grid Background - positioned behind the bowl */}
+        <ImageGridBackground />
+        
         {/* Bowl section with normal structure */}
         <InteractiveBowlSection />
       </div>
