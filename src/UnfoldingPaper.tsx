@@ -54,9 +54,6 @@ const PaperMesh = (props: {
   const rightFoldGroupRef = useRef<THREE.Group>(null!); 
   const charRefs = useRef<(THREE.Mesh | null)[]>([]);
   const [populatedRefsCount, setPopulatedRefsCount] = useState(0);
-  
-  // NEW STATE: To store precise glyph layout information
-  const [glyphLayouts, setGlyphLayouts] = useState<Array<{ x: number; width: number; char: string }> | null>(null);
 
   const texture = useMemo(() => {
     try {
@@ -213,161 +210,136 @@ const PaperMesh = (props: {
   // console.log("PaperMesh Render: Rendering segments.");
 
   // RESTORED character splitting and individual letter layout logic
-  const characters = useMemo(() => props.message.split(''), [props.message]);
+  const characters = useMemo(() => props.message.split(''), [props.message]); // Memoize characters
   const FONT_SIZE = 0.16;
-  // ESTIMATED_CHAR_WIDTH is no longer primary for positioning, but LINE_HEIGHT is still useful for animation.
-  const LINE_HEIGHT = FONT_SIZE * 1.2; 
-  // totalEstimatedWidth will be replaced by actual width from glyphLayouts
+  const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.48; // Adjusted for tighter spacing
+  const LINE_HEIGHT = FONT_SIZE * 1.2;
+  const totalEstimatedWidth = characters.length * ESTIMATED_CHAR_WIDTH;
 
-  // Effect to reset char refs and glyphLayouts when message changes
+  // RESTORED: Effect to reset refs and count when message changes
   useEffect(() => {
-    console.log("[PaperMesh TextInit] Message changed. Resetting char refs and glyphLayouts. Message:", props.message);
-    charRefs.current = new Array(props.message.length).fill(null); // Use props.message.length directly
-    setPopulatedRefsCount(0);
-    setGlyphLayouts(null); // Reset layouts so they are re-calculated
-  }, [props.message]); // props.message is the source of truth for characters array
-
-  useEffect(() => {
-    // This effect depends on characters array which is derived from props.message
-    // It ensures charRefs array is always correctly sized for the current message
-    // before any attempt to populate it.
-    if (charRefs.current.length !== characters.length) {
-        console.log("[PaperMesh CharRefSync] Syncing charRefs length due to character array change.");
-        charRefs.current = new Array(characters.length).fill(null);
-        setPopulatedRefsCount(0); // Critical to reset if characters array identity changes
-    }
-  }, [characters]);
+    console.log("[PaperMesh TextInit] Message changed or component mounted. Resetting char refs. Message length:", characters.length);
+    charRefs.current = new Array(characters.length).fill(null);
+    setPopulatedRefsCount(0); // Reset count
+  }, [characters]); 
 
   useEffect(() => {
-    if (!props.isTextVisible || !glyphLayouts || populatedRefsCount !== characters.length || characters.length === 0) {
-      if (props.isTextVisible && !glyphLayouts) {
-        // console.log("[PaperMesh TextAnim Effect] Waiting for glyphLayouts to be computed.");
-      } else if (props.isTextVisible && glyphLayouts && populatedRefsCount !== characters.length) {
-        // console.log(`[PaperMesh TextAnim Effect] Waiting for all charRefs. Populated: ${populatedRefsCount}, Expected: ${characters.length}`);
-      }
-      return;
-    }
-
-    console.log(`[PaperMesh TextAnim Effect] All conditions met. Animating IN ${characters.length} letters.`);
+    console.log(`[PaperMesh TextAnim Effect] Evaluating. Visible: ${props.isTextVisible}, Refs Populated: ${populatedRefsCount}, Expected Chars: ${characters.length}`);
+    
     const validTargets = charRefs.current.filter(Boolean) as THREE.Mesh[];
-    if (validTargets.length !== characters.length) {
-        console.warn(`[PaperMesh TextAnim Effect] Mismatch between populatedRefsCount/characters.length and actual valid targets. Expected ${characters.length}, got ${validTargets.length}. Aborting animation.`);
+
+    if (props.isTextVisible && populatedRefsCount === characters.length && characters.length > 0) {
+      if (validTargets.length !== characters.length) {
+        console.warn(`[PaperMesh TextAnim] Mismatch! populatedRefsCount is ${populatedRefsCount}, characters.length is ${characters.length}, but validTargets.length is ${validTargets.length}. Aborting animation.`);
         return;
-    }
-
-    validTargets.forEach((target, index) => {
-      const material = Array.isArray(target.material) ? target.material[0] : target.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
-      if (material) {
-        material.transparent = true; 
-        // console.log(`[PaperMesh TextAnim] Setting initial state for char '${characters[index]}' at index ${index}`);
-        gsap.set(material, { opacity: 0 });
-        gsap.set(target.position, { y: LINE_HEIGHT * 0.7 }); 
-        gsap.set(target.scale, { x: 0.5, y: 0.5, z: 0.5 });
-        gsap.set(target.rotation, { z: (Math.random() - 0.5) * Math.PI * 0.3 });
-
-        // console.log(`[PaperMesh TextAnim] Starting GSAP animation for char '${characters[index]}' at index ${index}`);
-        gsap.to(material, { opacity: 1, duration: 0.5, ease: 'power2.inOut', delay: index * 0.05 });
-        gsap.to(target.position, { y: 0, duration: 0.7, ease: 'back.out(1.4)', delay: index * 0.05 });
-        gsap.to(target.scale, { x: 1, y: 1, z: 1, duration: 0.7, ease: 'back.out(1.4)', delay: index * 0.05 });
-        gsap.to(target.rotation, { z: 0, duration: 0.7, ease: 'elastic.out(1, 0.75)', delay: index * 0.05 });
-      } else {
-        // console.warn(`[PaperMesh TextAnim] Material not found for char '${characters[index]}' at index ${index}`);
       }
-    });
-  }, [props.isTextVisible, populatedRefsCount, characters, glyphLayouts, LINE_HEIGHT, FONT_SIZE]);
+      console.log(`[PaperMesh TextAnim] Animating IN ${validTargets.length} letters.`);
 
-  // Fallback if segments (the paper pieces themselves) aren't ready.
-  if (!segments) {
-    console.warn("[PaperMesh Render] Segments not ready. Rendering fallback.");
-    return <mesh><planeGeometry args={[1,1]} /><meshBasicMaterial color="red" wireframe /></mesh>;
-  }
-  
-  // Calculate total width for centering the group if layouts are available
-  let totalTextWidth = 0;
-  if (glyphLayouts && glyphLayouts.length > 0) {
-    const firstGlyphX = glyphLayouts[0].x;
-    const lastGlyph = glyphLayouts[glyphLayouts.length - 1];
-    totalTextWidth = (lastGlyph.x + lastGlyph.width) - firstGlyphX;
-  }
+      validTargets.forEach((target, index) => {
+        const material = Array.isArray(target.material) ? target.material[0] : target.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
+        if (material) {
+          material.transparent = true; 
+          
+          console.log(`[PaperMesh TextAnim] Setting initial state for char '${characters[index]}' at index ${index}`);
+          gsap.set(material, { opacity: 0 });
+          gsap.set(target.position, { y: LINE_HEIGHT * 0.7 }); 
+          gsap.set(target.scale, { x: 0.5, y: 0.5, z: 0.5 });
+          gsap.set(target.rotation, { z: (Math.random() - 0.5) * Math.PI * 0.3 });
 
-  // console.log(`[PaperMesh Render] glyphLayouts: ${glyphLayouts ? ' vorhanden' : 'nicht vorhanden'}, props.isTextVisible: ${props.isTextVisible}`);
+          console.log(`[PaperMesh TextAnim] Starting GSAP animation for char '${characters[index]}' at index ${index}`);
+          gsap.to(material, {
+            opacity: 1,
+            duration: 0.5, 
+            ease: 'power2.inOut',
+            delay: index * 0.05, 
+          });
+          gsap.to(target.position, {
+            y: 0,
+            duration: 0.7,
+            ease: 'back.out(1.4)',
+            delay: index * 0.05,
+          });
+          gsap.to(target.scale, {
+            x: 1,
+            y: 1,
+            z: 1,
+            duration: 0.7,
+            ease: 'back.out(1.4)',
+            delay: index * 0.05,
+          });
+          gsap.to(target.rotation, {
+            z: 0,
+            duration: 0.7,
+            ease: 'elastic.out(1, 0.75)',
+            delay: index * 0.05,
+          });
+        } else {
+          console.warn(`[PaperMesh TextAnim] Material not found for char '${characters[index]}' at index ${index}`);
+        }
+      });
+    } else if (!props.isTextVisible && validTargets.length > 0 && characters.length > 0) { 
+      console.log(`[PaperMesh TextAnim] Setting text to invisible (props.isTextVisible is false). Animating ${validTargets.length} letters OUT.`);
+      validTargets.forEach(target => {
+        const material = Array.isArray(target.material) ? target.material[0] : target.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
+        if (material) {
+          gsap.set(material, { opacity: 0 }); // Just set opacity to 0, no animation out for now
+        }
+      });
+    } else {
+      if (props.isTextVisible) {
+          console.log(`[PaperMesh TextAnim] Condition not met for IN animation: Visible: ${props.isTextVisible}, Refs Populated: ${populatedRefsCount}, Expected Chars: ${characters.length}`);
+      }
+    }
+  }, [props.isTextVisible, populatedRefsCount, characters, LINE_HEIGHT, FONT_SIZE]); // Added FONT_SIZE to deps as LINE_HEIGHT depends on it indirectly.
 
   return (
     <group ref={mainGroupRef}>
-        {/* Paper Segments - These should always be part of the scene if PaperMesh is rendered */} 
         <primitive object={segments.tlSeg} />
         <primitive object={segments.blSeg} />
         <group ref={rightFoldGroupRef}>
             <primitive object={segments.trSeg} />
             <primitive object={segments.brSeg} />
         </group>
-
-        {/* Pass 1: Render invisible Text to calculate layout if not already done and text should be visible */}
-        {props.isTextVisible && !glyphLayouts && props.message && (
-          <Text
-            fontSize={FONT_SIZE}
-            font="/fonts/ARIAL.TTF"
-            anchorX="left" 
-            anchorY="middle"
-            onSync={(troikaMesh: any) => { 
-              if (troikaMesh && troikaMesh.textRenderInfo && troikaMesh.textRenderInfo.visibleGlyphs) {
-                const computedLayouts = troikaMesh.textRenderInfo.visibleGlyphs.map((glyph: any, index: number) => ({
-                  x: glyph.x,
-                  width: glyph.xAdvance, 
-                  char: props.message[glyph.charIndex] || characters[index], 
-                }));
-                if (props.message === characters.join('')) { 
-                  setGlyphLayouts(computedLayouts);
-                } else {
-                  // console.warn('[PaperMesh LayoutCalculator] Message changed during layout. Discarded.');
-                }
-              } else {
-                // console.warn('[PaperMesh LayoutCalculator] onSync: no textRenderInfo/visibleGlyphs.', troikaMesh);
-              }
-            }}
-            visible={false} 
-          >
-            {props.message} 
-          </Text>
-        )}
-
-        {/* Pass 2: Render visible, animated characters if layouts are ready and text should be visible */}
-        {props.isTextVisible && glyphLayouts && characters.length > 0 && (
-          <Suspense fallback={null}>
-            <group position={[-totalTextWidth / 2, 0, 0.03]}> {/* Center the block of text */}
-              {characters.map((char, index) => {
-                if (!glyphLayouts || !glyphLayouts[index]) { 
-                  // console.warn(`[PaperMesh Render] Missing glyphLayout for char '${char}' at index ${index}`);
-                  return null;
-                }
-                const layout = glyphLayouts[index];
-                return (
-                  <Text
-                    key={`${char}-${index}-${props.message}`} 
-                    ref={(el: THREE.Mesh | null) => {
-                      if (charRefs.current.length > index) { 
-                          const oldRef = charRefs.current[index];
-                          if (el && oldRef !== el) {
-                              charRefs.current[index] = el;
-                              setPopulatedRefsCount(prev => prev + 1);
-                          } else if (!el && oldRef) {
-                              charRefs.current[index] = null;
-                              // This ensures count is accurate if a ref is cleared then re-added
-                              setPopulatedRefsCount(prev => Math.max(0, prev -1)); 
-                          }
-                      }
-                    }}
-                    fontSize={FONT_SIZE}
-                    color="black"
-                    anchorX="left" 
-                    anchorY="middle" 
-                    position={[layout.x, 0, 0]} 
-                    font="/fonts/ARIAL.TTF" 
-                  >
-                    {char}
-                  </Text>
-                );
-              })}
+        
+        {/* Animated Text: Renders each character individually */} 
+        {props.isTextVisible && (
+          <Suspense fallback={null}> {/* Inner Suspense for Text only */}
+            <group position={[-totalEstimatedWidth / 2, 0, 0.03]}> {/* Center the block of text */}
+              {characters.map((char, index) => (
+                <Text
+                  key={`${char}-${index}-${props.message}`} // Ensure key is unique if message changes
+                  ref={(el: THREE.Mesh | null) => {
+                    const oldRef = charRefs.current[index];
+                    if (el && oldRef !== el) {
+                      console.log(`[PaperMesh TextRef] Assigning ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount + 1}`);
+                      charRefs.current[index] = el;
+                      // Atomically update count based on actual assignment
+                      setPopulatedRefsCount(prevCount => {
+                          // Recalculate based on current charRefs array state
+                          const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
+                          if(currentNonNullRefs > prevCount && el !== null) return prevCount +1; // only increment if it's a new valid ref
+                          return currentNonNullRefs; // Or simply recalculate always
+                      });
+                    } else if (!el && oldRef) {
+                      console.log(`[PaperMesh TextRef] Clearing ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount - 1}`);
+                      charRefs.current[index] = null;
+                       setPopulatedRefsCount(prevCount => {
+                           const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
+                           if (currentNonNullRefs < prevCount) return prevCount -1; // only decrement if a ref was cleared
+                           return currentNonNullRefs;
+                       });
+                    }
+                  }}
+                  fontSize={FONT_SIZE}
+                  color="black"
+                  anchorX="left"
+                  anchorY="middle" 
+                  position={[index * ESTIMATED_CHAR_WIDTH, 0, 0]} 
+                  font="/fonts/ARIAL.TTF" 
+                >
+                  {char}
+                </Text>
+              ))}
             </group>
           </Suspense>
         )}
