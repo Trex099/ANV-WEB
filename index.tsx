@@ -13,39 +13,11 @@ const App = () => {
   // const isSmallScreen = windowSize.width < 640;
 
   return (
-    // Outer container: flex flex-col to stack sections, min-h-screen for scrollability
     <div className="w-full min-h-screen flex flex-col select-none" aria-live="polite">
       {/* Top Interactive Bowl Section: h-screen and flex-shrink-0 to prevent shrinking */}
       <div className="relative w-full h-screen flex-shrink-0">
-        {/* Split container for title, heart model, and bowl */}
-        <div className="absolute inset-0 flex flex-col">
-          {/* Title area - fixed height for the title */}
-          <div className="h-16 sm:h-24 w-full relative" />
-          
-          {/* Spline Diamond Heart Container - centered in available space */}
-          <div className="flex-grow relative overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-full sm:w-3/4 md:w-2/3 lg:w-1/2 aspect-square relative">
-                <iframe 
-                  src='https://my.spline.design/diamondheart-hbQN0gppfiSZommAeSl9XaMX/' 
-                  frameBorder='0' 
-                  width='100%' 
-                  height='100%'
-                  title="Diamond Heart Background"
-                  style={{ pointerEvents: 'none' }}
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Space for bowl at bottom - approximate height needed */}
-          <div className="h-40 sm:h-52 md:h-64 w-full relative" />
-        </div>
-        
-        {/* Bowl section with z-index to ensure it appears properly */}
-        <div className="relative z-10 w-full h-full">
-          <InteractiveBowlSection />
-        </div>
+        {/* Bowl section with normal structure */}
+        <InteractiveBowlSection />
       </div>
 
       {/* Divider: Normal flow, with minimal vertical margin */}
@@ -77,8 +49,6 @@ const App = () => {
           ))}
         </div>
       </div>
-
-      {/* Modal is now part of InteractiveBowlSection */}
     </div>
   );
 };
