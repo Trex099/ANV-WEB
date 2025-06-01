@@ -52,9 +52,7 @@ const PaperMesh = (props: {
 }) => {
   const mainGroupRef = useRef<THREE.Group>(null!); 
   const rightFoldGroupRef = useRef<THREE.Group>(null!); 
-  const charRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const [populatedRefsCount, setPopulatedRefsCount] = useState(0);
-
+  
   const texture = useMemo(() => {
     try {
       if (!props.textureUrl) {
@@ -207,19 +205,12 @@ const PaperMesh = (props: {
     return <mesh><planeGeometry args={[1,1]} /><meshBasicMaterial color="red" wireframe /></mesh>; // Fallback if no segments
   } 
 
-  // console.log("PaperMesh Render: Rendering segments.");
-
-  // RESTORED character splitting and individual letter layout logic
-  const characters = useMemo(() => props.message.split(''), [props.message]); // Memoize characters
-  const FONT_SIZE = 0.16;
-  const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.48; // Adjusted for tighter spacing
-  const LINE_HEIGHT = FONT_SIZE * 1.2;
-  
-  // Text wrapping logic - calculate lines and character positions
-  const { lines, characterMetrics } = useMemo(() => {
+  // Simple text wrapping logic - calculate lines
+  const textLines = useMemo(() => {
     // Determine max chars per line based on paper width (with some margin)
+    const FONT_SIZE = 0.16;
     const maxLineWidth = PAPER_WIDTH * 0.85; // 85% of paper width for margins
-    const maxCharsPerLine = Math.floor(maxLineWidth / ESTIMATED_CHAR_WIDTH);
+    const maxCharsPerLine = Math.floor(maxLineWidth / (FONT_SIZE * 0.55));
     
     // Split message into words
     const words = props.message.split(' ');
@@ -242,106 +233,13 @@ const PaperMesh = (props: {
       lines.push(currentLine);
     }
     
-    // Calculate character metrics (which line and position within that line)
-    const characterMetrics: {lineIndex: number; charIndexInLine: number; xPosition: number; yPosition: number}[] = [];
-    let charCounter = 0;
-    
-    lines.forEach((line, lineIndex) => {
-      // Center each line
-      const lineWidth = line.length * ESTIMATED_CHAR_WIDTH;
-      const lineStartX = -lineWidth / 2;
-      const lineYPosition = (lines.length - 1) / 2 * -LINE_HEIGHT + lineIndex * LINE_HEIGHT;
-      
-      // Process each character in the line
-      for (let i = 0; i < line.length; i++) {
-        characterMetrics.push({
-          lineIndex,
-          charIndexInLine: i,
-          xPosition: lineStartX + (i + 0.5) * ESTIMATED_CHAR_WIDTH, // Center each character in its space
-          yPosition: lineYPosition
-        });
-        charCounter++;
-      }
-    });
-    
-    return { lines, characterMetrics };
-  }, [props.message, ESTIMATED_CHAR_WIDTH]);
-  
-  // RESTORED: Effect to reset refs and count when message changes
-  useEffect(() => {
-    console.log("[PaperMesh TextInit] Message changed or component mounted. Resetting char refs. Message length:", characters.length);
-    charRefs.current = new Array(characters.length).fill(null);
-    setPopulatedRefsCount(0); // Reset count
-  }, [characters]); 
+    return lines;
+  }, [props.message]);
 
-  useEffect(() => {
-    console.log(`[PaperMesh TextAnim Effect] Evaluating. Visible: ${props.isTextVisible}, Refs Populated: ${populatedRefsCount}, Expected Chars: ${characters.length}`);
-    
-    const validTargets = charRefs.current.filter(Boolean) as THREE.Mesh[];
-
-    if (props.isTextVisible && populatedRefsCount === characters.length && characters.length > 0) {
-      if (validTargets.length !== characters.length) {
-        console.warn(`[PaperMesh TextAnim] Mismatch! populatedRefsCount is ${populatedRefsCount}, characters.length is ${characters.length}, but validTargets.length is ${validTargets.length}. Aborting animation.`);
-        return;
-      }
-      console.log(`[PaperMesh TextAnim] Animating IN ${validTargets.length} letters.`);
-
-      validTargets.forEach((target, index) => {
-        const material = Array.isArray(target.material) ? target.material[0] : target.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
-        if (material) {
-          material.transparent = true; 
-          
-          console.log(`[PaperMesh TextAnim] Setting initial state for char '${characters[index]}' at index ${index}`);
-          gsap.set(material, { opacity: 0 });
-          gsap.set(target.position, { y: LINE_HEIGHT * 0.7 }); 
-          gsap.set(target.scale, { x: 0.5, y: 0.5, z: 0.5 });
-          gsap.set(target.rotation, { z: (Math.random() - 0.5) * Math.PI * 0.3 });
-
-          console.log(`[PaperMesh TextAnim] Starting GSAP animation for char '${characters[index]}' at index ${index}`);
-          gsap.to(material, {
-            opacity: 1,
-            duration: 0.5, 
-            ease: 'power2.inOut',
-            delay: index * 0.05, 
-          });
-          gsap.to(target.position, {
-            y: 0,
-            duration: 0.7,
-            ease: 'back.out(1.4)',
-            delay: index * 0.05,
-          });
-          gsap.to(target.scale, {
-            x: 1,
-            y: 1,
-            z: 1,
-            duration: 0.7,
-            ease: 'back.out(1.4)',
-            delay: index * 0.05,
-          });
-          gsap.to(target.rotation, {
-            z: 0,
-            duration: 0.7,
-            ease: 'elastic.out(1, 0.75)',
-            delay: index * 0.05,
-          });
-        } else {
-          console.warn(`[PaperMesh TextAnim] Material not found for char '${characters[index]}' at index ${index}`);
-        }
-      });
-    } else if (!props.isTextVisible && validTargets.length > 0 && characters.length > 0) { 
-      console.log(`[PaperMesh TextAnim] Setting text to invisible (props.isTextVisible is false). Animating ${validTargets.length} letters OUT.`);
-      validTargets.forEach(target => {
-        const material = Array.isArray(target.material) ? target.material[0] : target.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
-        if (material) {
-          gsap.set(material, { opacity: 0 }); // Just set opacity to 0, no animation out for now
-        }
-      });
-    } else {
-      if (props.isTextVisible) {
-          console.log(`[PaperMesh TextAnim] Condition not met for IN animation: Visible: ${props.isTextVisible}, Refs Populated: ${populatedRefsCount}, Expected Chars: ${characters.length}`);
-      }
-    }
-  }, [props.isTextVisible, populatedRefsCount, characters, LINE_HEIGHT, FONT_SIZE]); // Added FONT_SIZE to deps as LINE_HEIGHT depends on it indirectly.
+  // Calculate the line height and starting Y position for text block
+  const FONT_SIZE = 0.16;
+  const LINE_HEIGHT = FONT_SIZE * 1.5;
+  const startY = ((textLines.length - 1) * LINE_HEIGHT) / 2;
 
   return (
     <group ref={mainGroupRef}>
@@ -352,65 +250,24 @@ const PaperMesh = (props: {
             <primitive object={segments.brSeg} />
         </group>
         
-        {/* Animated Text: Renders each character individually */} 
+        {/* Simple Text: One Text component per line */} 
         {props.isTextVisible && (
-          <Suspense fallback={null}> {/* Inner Suspense for Text only */}
-            <group position={[0, 0, 0.03]}> {/* Center directly on paper */}
-              {characters.map((char, index) => {
-                // Skip rendering spaces - they don't need a mesh
-                if (char === ' ') {
-                  // Still need to populate the ref so our count is accurate
-                  if (charRefs.current[index] === undefined) {
-                    charRefs.current[index] = null;
-                    setPopulatedRefsCount(prev => prev + 1);
-                  }
-                  return null;
-                }
-                
-                // Check if we have metrics for this character
-                if (!characterMetrics[index]) {
-                  console.error(`No metrics found for character at index ${index}: '${char}'`);
-                  return null;
-                }
-                
-                const metrics = characterMetrics[index];
-                
-                return (
-                  <Text
-                    key={`${char}-${index}-${props.message}`} // Ensure key is unique if message changes
-                    ref={(el: THREE.Mesh | null) => {
-                      const oldRef = charRefs.current[index];
-                      if (el && oldRef !== el) {
-                        console.log(`[PaperMesh TextRef] Assigning ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount + 1}`);
-                        charRefs.current[index] = el;
-                        // Atomically update count based on actual assignment
-                        setPopulatedRefsCount(prevCount => {
-                            // Recalculate based on current charRefs array state
-                            const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
-                            if(currentNonNullRefs > prevCount && el !== null) return prevCount +1; // only increment if it's a new valid ref
-                            return currentNonNullRefs; // Or simply recalculate always
-                        });
-                      } else if (!el && oldRef) {
-                        console.log(`[PaperMesh TextRef] Clearing ref for char '${char}' at index ${index}. New Populated Count will be: ${populatedRefsCount - 1}`);
-                        charRefs.current[index] = null;
-                         setPopulatedRefsCount(prevCount => {
-                             const currentNonNullRefs = charRefs.current.filter(r => r !== null).length;
-                             if (currentNonNullRefs < prevCount) return prevCount -1; // only decrement if a ref was cleared
-                             return currentNonNullRefs;
-                         });
-                      }
-                    }}
-                    fontSize={FONT_SIZE}
-                    color="black"
-                    anchorX="center" // Center each character horizontally
-                    anchorY="middle" 
-                    position={[metrics.xPosition, metrics.yPosition, 0]} // Use metrics for positioning
-                    font="/fonts/ARIAL.TTF" 
-                  >
-                    {char}
-                  </Text>
-                );
-              })}
+          <Suspense fallback={null}>
+            <group position={[0, 0, 0.03]}>
+              {textLines.map((line, index) => (
+                <Text
+                  key={`line-${index}`}
+                  fontSize={0.16}
+                  color="black"
+                  anchorX="center"
+                  anchorY="middle"
+                  position={[0, startY - (index * LINE_HEIGHT), 0]}
+                  font="/fonts/ARIAL.TTF"
+                  textAlign="center"
+                >
+                  {line}
+                </Text>
+              ))}
             </group>
           </Suspense>
         )}
