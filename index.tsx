@@ -17,27 +17,32 @@ const App = () => {
     <div className="w-full min-h-screen flex flex-col select-none" aria-live="polite">
       {/* Top Interactive Bowl Section: h-screen and flex-shrink-0 to prevent shrinking */}
       <div className="relative w-full h-screen flex-shrink-0">
-        {/* Create a split container for title and content */}
-        <div className="absolute top-0 left-0 w-full h-full flex flex-col z-10">
-          {/* Title area - reserve top space for the title */}
-          <div className="h-16 sm:h-20 w-full relative z-20">
-            {/* InteractiveBowlSection will place its own title here */}
+        {/* Split container for title, heart model, and bowl */}
+        <div className="absolute inset-0 flex flex-col">
+          {/* Title area - fixed height for the title */}
+          <div className="h-16 sm:h-24 w-full relative" />
+          
+          {/* Spline Diamond Heart Container - centered in available space */}
+          <div className="flex-grow relative overflow-hidden">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-full sm:w-3/4 md:w-2/3 lg:w-1/2 aspect-square relative">
+                <iframe 
+                  src='https://my.spline.design/diamondheart-hbQN0gppfiSZommAeSl9XaMX/' 
+                  frameBorder='0' 
+                  width='100%' 
+                  height='100%'
+                  title="Diamond Heart Background"
+                  style={{ pointerEvents: 'none' }}
+                />
+              </div>
+            </div>
           </div>
           
-          {/* Spline Diamond Heart - positioned below title, above bowl */}
-          <div className="flex-grow relative">
-            <iframe 
-              src='https://my.spline.design/diamondheart-hbQN0gppfiSZommAeSl9XaMX/' 
-              frameBorder='0' 
-              width='100%' 
-              height='100%'
-              title="Diamond Heart Background"
-              style={{ pointerEvents: 'none' }}
-            />
-          </div>
+          {/* Space for bowl at bottom - approximate height needed */}
+          <div className="h-40 sm:h-52 md:h-64 w-full relative" />
         </div>
         
-        {/* Bowl section with normal z-index to ensure it appears over the Spline model */}
+        {/* Bowl section with z-index to ensure it appears properly */}
         <div className="relative z-10 w-full h-full">
           <InteractiveBowlSection />
         </div>
