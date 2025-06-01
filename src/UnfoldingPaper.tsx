@@ -214,7 +214,20 @@ const PaperMesh = (props: {
   const FONT_SIZE = 0.16;
   const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.48; // Adjusted for tighter spacing
   const LINE_HEIGHT = FONT_SIZE * 1.2;
+  // Calculate total width to center properly
   const totalEstimatedWidth = characters.length * ESTIMATED_CHAR_WIDTH;
+  
+  // Calculate each character's position, centered on paper
+  const characterPositions = useMemo(() => {
+    const positions: number[] = []; // Explicitly type the array as number[]
+    const totalWidth = characters.length * ESTIMATED_CHAR_WIDTH;
+    const startX = -totalWidth / 2; // Start at left edge of centered block
+    
+    for (let i = 0; i < characters.length; i++) {
+      positions.push(startX + (i + 0.5) * ESTIMATED_CHAR_WIDTH); // +0.5 to center each char in its space
+    }
+    return positions;
+  }, [characters, ESTIMATED_CHAR_WIDTH]);
 
   // RESTORED: Effect to reset refs and count when message changes
   useEffect(() => {
@@ -304,7 +317,7 @@ const PaperMesh = (props: {
         {/* Animated Text: Renders each character individually */} 
         {props.isTextVisible && (
           <Suspense fallback={null}> {/* Inner Suspense for Text only */}
-            <group position={[-totalEstimatedWidth / 2, 0, 0.03]}> {/* Center the block of text */}
+            <group position={[0, 0, 0.03]}> {/* Center directly on paper */}
               {characters.map((char, index) => (
                 <Text
                   key={`${char}-${index}-${props.message}`} // Ensure key is unique if message changes
@@ -332,9 +345,9 @@ const PaperMesh = (props: {
                   }}
                   fontSize={FONT_SIZE}
                   color="black"
-                  anchorX="left"
+                  anchorX="center" // Center each character horizontally
                   anchorY="middle" 
-                  position={[index * ESTIMATED_CHAR_WIDTH, 0, 0]} 
+                  position={[characterPositions[index], 0, 0]} // Use pre-calculated positions
                   font="/fonts/ARIAL.TTF" 
                 >
                   {char}
