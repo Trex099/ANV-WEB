@@ -52,8 +52,7 @@ const PaperMesh = (props: {
 }) => {
   const mainGroupRef = useRef<THREE.Group>(null!); 
   const rightFoldGroupRef = useRef<THREE.Group>(null!); 
-  const charRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const [populatedRefsCount, setPopulatedRefsCount] = useState(0);
+  const textRef = useRef<THREE.Mesh>(null!); // ADD: Ref for the single Text component
 
   const texture = useMemo(() => {
     try {
@@ -209,92 +208,63 @@ const PaperMesh = (props: {
 
   // console.log("PaperMesh Render: Rendering segments.");
 
-  const characters = props.message.split('');
+  // REMOVE character splitting and individual letter layout logic
+  // const characters = props.message.split('');
   const FONT_SIZE = 0.16;
-  const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.52;
-  const LINE_HEIGHT = FONT_SIZE * 1.2;
-  const totalEstimatedWidth = characters.length * ESTIMATED_CHAR_WIDTH;
+  // const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.52; 
+  // const LINE_HEIGHT = FONT_SIZE * 1.2;
+  // const totalEstimatedWidth = characters.length * ESTIMATED_CHAR_WIDTH;
 
-  // Effect to reset refs and count when message changes
-  useEffect(() => {
-    console.log("PaperMesh TextInit: Message changed, resetting refs state.");
-    charRefs.current = new Array(characters.length).fill(null);
-    setPopulatedRefsCount(0);
-  }, [characters]); // Use memoized characters array
+  // REMOVE: Effect to reset refs and count when message changes
+  // useEffect(() => { ... }, [characters]);
 
   useEffect(() => {
-    console.log("PaperMesh TextAnim: Evaluating. Visible:", props.isTextVisible, "Refs Populated:", populatedRefsCount, "Expected:", characters.length);
+    // console.log("PaperMesh TextAnim: Evaluating. Visible:", props.isTextVisible);
     
-    // Get valid targets once, upfront.
-    const validTargets = charRefs.current.filter(Boolean) as THREE.Mesh[];
+    if (props.isTextVisible && textRef.current) {
+      // console.log("PaperMesh TextAnim: Animating IN single Text block.");
+      const target = textRef.current;
+      const material = Array.isArray(target.material) ? target.material[0] : target.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial; // Added type assertion
 
-    if (props.isTextVisible && populatedRefsCount === characters.length && characters.length > 0) {
-      if (validTargets.length !== characters.length) {
-        // This case should ideally not be hit if populatedRefsCount is accurate
-        console.warn("PaperMesh TextAnim: Mismatch between populatedRefsCount and actual valid targets. Aborting animation.");
-        return;
+      if (material) {
+        material.transparent = true;
+        
+        // Initial state for the single text block
+        gsap.set(material, { opacity: 0 });
+        gsap.set(target.scale, { x: 0.7, y: 0.7, z: 0.7 });
+        gsap.set(target.position, { y: FONT_SIZE * 0.5, z: 0.03 }); // Slight lift and forward
+
+        // Animate to final state
+        gsap.to(material, {
+          opacity: 1,
+          duration: 0.8,
+          ease: 'power2.inOut',
+          delay: 0.2, // Slight delay after paper opens
+        });
+        gsap.to(target.scale, {
+          x: 1,
+          y: 1,
+          z: 1,
+          duration: 1.0,
+          ease: 'back.out(1.7)',
+          delay: 0.2,
+        });
+        gsap.to(target.position, {
+          y: 0, // Settle to baseline
+          duration: 1.0,
+          ease: 'back.out(1.7)',
+          delay: 0.2,
+        });
       }
-      console.log("PaperMesh TextAnim: Animating IN", validTargets.length, "letters.");
-
-      validTargets.forEach((target, index) => {
-        if (target.material) {
-          // Ensure material is an object and not an array (usually not for Text)
-          const material = Array.isArray(target.material) ? target.material[0] : target.material;
-          if (material) {
-            material.transparent = true; // ESSENTIAL for opacity to work
-            
-            // Set initial state
-            gsap.set(material, { opacity: 0 });
-            gsap.set(target.position, { y: LINE_HEIGHT * 0.7 }); // Start from above
-            gsap.set(target.scale, { x: 0.5, y: 0.5, z: 0.5 });
-            gsap.set(target.rotation, { z: (Math.random() - 0.5) * Math.PI * 0.3 }); // Restored random initial tilt
-
-            // Animate to final state
-            gsap.to(material, {
-              opacity: 1,
-              duration: 0.5, // Slightly faster opacity
-              ease: 'power2.inOut',
-              delay: index * 0.05, // Stagger animation
-            });
-            gsap.to(target.position, {
-              y: 0,
-              duration: 0.7,
-              ease: 'back.out(1.4)',
-              delay: index * 0.05,
-            });
-            gsap.to(target.scale, {
-              x: 1,
-              y: 1,
-              z: 1,
-              duration: 0.7,
-              ease: 'back.out(1.4)',
-              delay: index * 0.05,
-            });
-            gsap.to(target.rotation, {
-              z: 0,
-              duration: 0.7,
-              ease: 'elastic.out(1, 0.75)',
-              delay: index * 0.05,
-            });
-          } else {
-            console.warn("PaperMesh TextAnim: Material not found for target index", index);
-          }
-        } else {
-          console.warn("PaperMesh TextAnim: Target or material not found for index", index);
-        }
-      });
-    } else if (!props.isTextVisible && validTargets.length > 0 && characters.length > 0) { // Check validTargets here
-      console.log("PaperMesh TextAnim: Setting text to invisible (props.isTextVisible is false).");
-      validTargets.forEach(target => {
-        if (target.material) {
-          const material = Array.isArray(target.material) ? target.material[0] : target.material;
-          if (material) {
-            gsap.set(material, { opacity: 0 });
-          }
-        }
-      });
+    } else if (!props.isTextVisible && textRef.current) {
+      // console.log("PaperMesh TextAnim: Setting single Text block to invisible.");
+      const target = textRef.current;
+      const material = Array.isArray(target.material) ? target.material[0] : target.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial; // Added type assertion
+      if (material) {
+        gsap.set(material, { opacity: 0 });
+      }
     }
-  }, [props.isTextVisible, populatedRefsCount, characters, LINE_HEIGHT]); // Added characters to dependencies
+  }, [props.isTextVisible, FONT_SIZE]); // Removed dependencies like populatedRefsCount, characters, LINE_HEIGHT
 
   return (
     <group ref={mainGroupRef}>
@@ -305,39 +275,26 @@ const PaperMesh = (props: {
             <primitive object={segments.brSeg} />
         </group>
         
-        {/* Animated Text: Renders each character individually */} 
+        {/* Animated Text: Renders entire message as one block */} 
         {props.isTextVisible && (
           <Suspense fallback={null}> {/* Inner Suspense for Text only */}
-            <group position={[-totalEstimatedWidth / 2, 0, 0.03]}> {/* Center the block of text */}
-              {characters.map((char, index) => (
-                <Text
-                  key={`${char}-${index}`}
-                  ref={(el: THREE.Mesh | null) => {
-                    // Only update if the ref instance actually changes to avoid potential loops
-                    if (el && charRefs.current[index] !== el) {
-                      charRefs.current[index] = el;
-                      setPopulatedRefsCount(prev => prev + 1);
-                    } else if (!el && charRefs.current[index]) {
-                      // This part handles cleanup if a Text component unmounts and its ref becomes null
-                      // For this app, characters don't dynamically unmount often, but good for robustness
-                      charRefs.current[index] = null;
-                      setPopulatedRefsCount(prev => prev - 1); // Should be paired with re-initialization logic if characters change
-                    }
-                  }}
-                  fontSize={FONT_SIZE}
-                  color="black"
-                  anchorX="left"
-                  anchorY="middle" 
-                  position={[index * ESTIMATED_CHAR_WIDTH, 0, 0]} // Position each letter horizontally
-                  font="/fonts/ARIAL.TTF" // Using ARIA.TTF, ensure this file exists in public/fonts/
-                  // Set initial opacity to 0 to avoid flash before GSAP takes control if needed
-                  // However, GSAP.set in useEffect should handle this if timed correctly.
-                  // material-opacity={0} // Alternative way to set initial opacity if GSAP set is too slow
-                >
-                  {char}
-                </Text>
-              ))}
-            </group>
+            {/* REMOVE: <group position={[-totalEstimatedWidth / 2, 0, 0.03]}> */}
+            {/* REMOVE: character.map logic */}
+            <Text
+              ref={textRef} // Use the new single ref
+              fontSize={FONT_SIZE}
+              color="black"
+              anchorX="center" // Center the text block
+              anchorY="middle" 
+              position={[0, 0, 0.03]} // Position in the center of the paper, slightly forward
+              maxWidth={PAPER_WIDTH * 0.85} // Allow text to wrap if too long
+              textAlign="center"
+              font="/fonts/ARIAL.TTF"
+              // material-opacity={0} // GSAP handles initial opacity
+            >
+              {props.message}
+            </Text>
+            {/* REMOVE: </group> */}
           </Suspense>
         )}
     </group>
