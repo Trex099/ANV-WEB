@@ -9,7 +9,6 @@ interface Poster {
 
 interface NetflixBackgroundProps {
   imageUrls?: string[];
-  // numRows and postersPerRow will now be dynamically calculated
 }
 
 // A simple hook to get window size
@@ -49,31 +48,33 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
 }) => {
   const { width: windowWidth } = useWindowSize();
 
-  const { numRows, postersPerRow, isSmallScreen } = useMemo(() => {
+  const { numRows, postersPerRow, isSmallScreen, isVerySmallScreen } = useMemo(() => {
     const width = windowWidth || 0;
     let rows = 6;
     let posters = 15;
     let smallScreen = false;
+    let verySmallScreen = false;
 
-    if (width < 480) { // Extra Small screens
+    if (width < 480) {
       rows = 4;
-      posters = 8;
+      posters = 7; // Reduced further for very small screens
       smallScreen = true;
-    } else if (width < 768) { // Small screens (mobile landscape, portrait tablets)
+      verySmallScreen = true;
+    } else if (width < 768) {
       rows = 5;
-      posters = 10;
+      posters = 9; // Reduced for small screens
       smallScreen = true;
-    } else if (width < 1024) { // Medium screens (tablets landscape, small laptops)
+    } else if (width < 1024) {
       rows = 5;
       posters = 12;
-    } else if (width < 1440) { // Large screens
+    } else if (width < 1440) {
       rows = 6;
       posters = 15;
-    } else { // Extra large screens
+    } else {
       rows = 7;
       posters = 18;
     }
-    return { numRows: rows, postersPerRow: posters, isSmallScreen: smallScreen };
+    return { numRows: rows, postersPerRow: posters, isSmallScreen: smallScreen, isVerySmallScreen: verySmallScreen };
   }, [windowWidth]);
 
   const posters = useMemo(() => {
@@ -106,40 +107,49 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
     <div className={styles.netflixBackground}>
       <div className={styles.perspectiveContainer}>
         <div className={styles.gridContainer}>
-          {posterRows.map((row, rowIndex) => (
-            <div
-              key={`row-${rowIndex}`}
-              className={`${styles.posterRow} ${rowIndex % 2 === 0 ? styles.scrollLeft : styles.scrollRight}`}
-              style={{
-                transform: `translateZ(${-rowIndex * (isSmallScreen ? 30 : 50)}px) translateX(${rowIndex % 2 === 0 ? '0px' : (isSmallScreen ? '-15px' : '-30px')})`,
-              }}
-            >
-              {row.map((poster, posterIndex) => {
-                const rYMultiplier = isSmallScreen ? 10 : 20;
-                const rXMultiplier = isSmallScreen ? 4 : 8;
-                const skewMultiplier = isSmallScreen ? 3 : 6;
-                const zMultiplier = isSmallScreen ? 7.5 : 15;
+          {posterRows.map((row, rowIndex) => {
+            let rowTranslateZMultiplier = 50;
+            if (isVerySmallScreen) {
+              rowTranslateZMultiplier = 20;
+            } else if (isSmallScreen) {
+              rowTranslateZMultiplier = 30;
+            }
 
-                const rotateY = Math.random() * rYMultiplier - rYMultiplier / 2;
-                const rotateX = Math.random() * rXMultiplier - rXMultiplier / 2;
-                const skewY = Math.random() * skewMultiplier - skewMultiplier / 2;
-                const zOffset = Math.random() * zMultiplier - zMultiplier / 2;
+            return (
+              <div
+                key={`row-${rowIndex}`}
+                className={`${styles.posterRow} ${rowIndex % 2 === 0 ? styles.scrollLeft : styles.scrollRight}`}
+                style={{
+                  transform: `translateZ(${-rowIndex * rowTranslateZMultiplier}px) translateX(${rowIndex % 2 === 0 ? '0px' : (isSmallScreen ? '-15px' : '-30px')})`,
+                }}
+              >
+                {row.map((poster, posterIndex) => {
+                  const rYMultiplier = isSmallScreen ? 8 : 15; // Further reduced for small
+                  const rXMultiplier = isSmallScreen ? 3 : 6;
+                  const skewMultiplier = isSmallScreen ? 2 : 4;
+                  const zMultiplier = isSmallScreen ? 5 : 10;
 
-                return (
-                  <div
-                    key={`${rowIndex}-${poster.id}-${posterIndex}`}
-                    className={styles.posterItem}
-                    style={{
-                      backgroundImage: `url(${poster.imageUrl})`,
-                      transform: `rotateY(${rotateY}deg) rotateX(${rotateX}deg) skewY(${skewY}deg) translateZ(${zOffset}px)`,
-                      zIndex: Math.floor(Math.random() * (numRows - rowIndex + 1)),
-                    }}
-                    aria-label={poster.altText}
-                  />
-                );
-              })}
-            </div>
-          ))}
+                  const rotateY = Math.random() * rYMultiplier - rYMultiplier / 2;
+                  const rotateX = Math.random() * rXMultiplier - rXMultiplier / 2;
+                  const skewY = Math.random() * skewMultiplier - skewMultiplier / 2;
+                  const zOffset = Math.random() * zMultiplier - zMultiplier / 2;
+
+                  return (
+                    <div
+                      key={`${rowIndex}-${poster.id}-${posterIndex}`}
+                      className={styles.posterItem}
+                      style={{
+                        backgroundImage: `url(${poster.imageUrl})`,
+                        transform: `rotateY(${rotateY}deg) rotateX(${rotateX}deg) skewY(${skewY}deg) translateZ(${zOffset}px)`,
+                        zIndex: Math.floor(Math.random() * (numRows - rowIndex + 1)),
+                      }}
+                      aria-label={poster.altText}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
