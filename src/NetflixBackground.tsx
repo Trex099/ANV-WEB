@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import styles from './NetflixBackground.module.css';
 
 interface Poster {
@@ -8,24 +8,74 @@ interface Poster {
 }
 
 interface NetflixBackgroundProps {
-  imageUrls?: string[]; // Optional, will use placeholders if not provided
-  numRows?: number;
-  postersPerRow?: number;
+  imageUrls?: string[];
+  // numRows and postersPerRow will now be dynamically calculated
 }
+
+// A simple hook to get window size
+const useWindowSize = () => {
+  const [windowSize, setWindowSize] = useState<{
+    width: number | undefined;
+    height: number | undefined;
+  }> ({
+    width: undefined,
+    height: undefined,
+  });
+
+  useEffect(() => {
+    function handleResize() {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Call handler right away so state gets updated with initial window size
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  return windowSize;
+};
 
 const generatePlaceholderPosters = (count: number): Poster[] => {
   return Array.from({ length: count }).map((_, i) => ({
     id: `placeholder-${i}`,
-    imageUrl: `https://picsum.photos/seed/${i + 100}/200/300`, // Seeded for consistency
+    imageUrl: `https://picsum.photos/seed/${i + 100}/180/270`, // Using a common size for placeholders
     altText: `Placeholder Poster ${i + 1}`,
   }));
 };
 
 const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
   imageUrls,
-  numRows = 6, // Default 6 rows
-  postersPerRow = 15, // Default 15 posters per row (to ensure overflow)
 }) => {
+  const { width: windowWidth } = useWindowSize();
+
+  const { numRows, postersPerRow, isSmallScreen } = useMemo(() => {
+    const width = windowWidth || 0;
+    let rows = 6;
+    let posters = 15;
+    let smallScreen = false;
+
+    if (width < 480) { // Extra Small screens
+      rows = 4;
+      posters = 8;
+      smallScreen = true;
+    } else if (width < 768) { // Small screens (mobile landscape, portrait tablets)
+      rows = 5;
+      posters = 10;
+      smallScreen = true;
+    } else if (width < 1024) { // Medium screens (tablets landscape, small laptops)
+      rows = 5;
+      posters = 12;
+    } else if (width < 1440) { // Large screens
+      rows = 6;
+      posters = 15;
+    } else { // Extra large screens
+      rows = 7;
+      posters = 18;
+    }
+    return { numRows: rows, postersPerRow: posters, isSmallScreen: smallScreen };
+  }, [windowWidth]);
+
   const posters = useMemo(() => {
     if (imageUrls && imageUrls.length > 0) {
       return imageUrls.map((url, i) => ({
@@ -34,16 +84,16 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
         altText: `Custom Poster ${i + 1}`,
       }));
     }
-    return generatePlaceholderPosters(numRows * postersPerRow);
+    return generatePlaceholderPosters(numRows * postersPerRow); // Ensure enough placeholders
   }, [imageUrls, numRows, postersPerRow]);
 
-  // Create a 2D array for rows of posters
   const posterRows: Poster[][] = useMemo(() => {
     const rows: Poster[][] = [];
     let posterIndex = 0;
     for (let i = 0; i < numRows; i++) {
       const rowPosters: Poster[] = [];
       for (let j = 0; j < postersPerRow; j++) {
+        // Cycle through available posters if not enough unique ones
         rowPosters.push(posters[posterIndex % posters.length]);
         posterIndex++;
       }
@@ -61,16 +111,19 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
               key={`row-${rowIndex}`}
               className={`${styles.posterRow} ${rowIndex % 2 === 0 ? styles.scrollLeft : styles.scrollRight}`}
               style={{
-                // Increased translateZ multiplier for more pronounced depth between rows
-                // Staggering X based on row index still for some variation
-                transform: `translateZ(${-rowIndex * 60}px) translateX(${rowIndex % 2 === 0 ? '0px' : '-30px'})`,
+                transform: `translateZ(${-rowIndex * (isSmallScreen ? 30 : 50)}px) translateX(${rowIndex % 2 === 0 ? '0px' : (isSmallScreen ? '-15px' : '-30px')})`,
               }}
             >
               {row.map((poster, posterIndex) => {
-                const rotateY = Math.random() * 20 - 10; // Reduced Y rotation range
-                const rotateX = Math.random() * 8 - 4;  // Reduced X rotation range
-                const skewY = Math.random() * 6 - 3;   // Reduced SkewY range
-                const zOffset = Math.random() * 15 - 7.5; 
+                const rYMultiplier = isSmallScreen ? 10 : 20;
+                const rXMultiplier = isSmallScreen ? 4 : 8;
+                const skewMultiplier = isSmallScreen ? 3 : 6;
+                const zMultiplier = isSmallScreen ? 7.5 : 15;
+
+                const rotateY = Math.random() * rYMultiplier - rYMultiplier / 2;
+                const rotateX = Math.random() * rXMultiplier - rXMultiplier / 2;
+                const skewY = Math.random() * skewMultiplier - skewMultiplier / 2;
+                const zOffset = Math.random() * zMultiplier - zMultiplier / 2;
 
                 return (
                   <div
@@ -79,7 +132,7 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
                     style={{
                       backgroundImage: `url(${poster.imageUrl})`,
                       transform: `rotateY(${rotateY}deg) rotateX(${rotateX}deg) skewY(${skewY}deg) translateZ(${zOffset}px)`,
-                      zIndex: Math.floor(Math.random() * (numRows - rowIndex)), // Tie zIndex to row for better layering
+                      zIndex: Math.floor(Math.random() * (numRows - rowIndex + 1)),
                     }}
                     aria-label={poster.altText}
                   />
