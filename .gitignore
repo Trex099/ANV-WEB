@@ -101,7 +101,6 @@ public/build/
 
 # Gatsby specific
 .cache/
-public/
 
 # VuePress specific
 .vuepress/dist
