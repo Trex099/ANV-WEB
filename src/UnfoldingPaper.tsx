@@ -211,7 +211,7 @@ const PaperMesh = (props: {
 
   const characters = props.message.split('');
   const FONT_SIZE = 0.16;
-  const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.5;
+  const ESTIMATED_CHAR_WIDTH = FONT_SIZE * 0.52;
   const LINE_HEIGHT = FONT_SIZE * 1.2;
   const totalEstimatedWidth = characters.length * ESTIMATED_CHAR_WIDTH;
 
@@ -247,7 +247,7 @@ const PaperMesh = (props: {
             gsap.set(material, { opacity: 0 });
             gsap.set(target.position, { y: LINE_HEIGHT * 0.7 }); // Start from above
             gsap.set(target.scale, { x: 0.5, y: 0.5, z: 0.5 });
-            gsap.set(target.rotation, { z: (Math.random() - 0.5) * Math.PI * 0.2 }); // Slightly reduced random initial tilt
+            gsap.set(target.rotation, { z: (Math.random() - 0.5) * Math.PI * 0.3 }); // Restored random initial tilt
 
             // Animate to final state
             gsap.to(material, {
