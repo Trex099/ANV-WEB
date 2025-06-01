@@ -11,55 +11,55 @@ const generatePlaceholderImages = (count: number) => {
 };
 
 const ImageGridBackground: React.FC = () => {
-  const placeholderImages = generatePlaceholderImages(24); // More images for a fuller grid
-  
+  const placeholderImages = generatePlaceholderImages(48); // Increased image count for more density
+
   return (
     <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none select-none -z-10">
       {/* Semi-transparent overlay */}
-      <div className="absolute inset-0 bg-black bg-opacity-70 z-10"></div>
-      
+      <div className="absolute inset-0 bg-black bg-opacity-75 z-10"></div>
+
       {/* Netflix-style perspective container */}
-      <div className="absolute inset-0" 
-           style={{ 
-             perspective: '1200px',
-             transformStyle: 'preserve-3d',
-             overflow: 'hidden',
-           }}>
-        <div className="absolute inset-0" 
-             style={{ 
-               transform: 'rotateX(12deg) translateY(5%) scale(1.3)',
-               transformOrigin: 'center top',
-             }}>
+      <div
+        className="absolute inset-0"
+        style={{
+          perspective: '800px', // Stronger perspective
+          transformStyle: 'preserve-3d',
+          overflow: 'visible', // Allow images to overflow for a fuller look
+        }}
+      >
+        <div
+          className="absolute w-full h-full" // Ensure it covers the area
+          style={{
+            transform: 'rotateX(50deg) translateY(-30%) scale(1.5)', // Adjusted rotation, translation, and scale
+            transformOrigin: 'center bottom', // Pivot from bottom center
+          }}
+        >
           {/* Image grid with Netflix-style angled layout */}
-          <div className="absolute inset-0 grid grid-cols-6 md:grid-cols-8 gap-3 p-6">
+          {/* Increased density by adding more columns and adjusting gap/padding */}
+          <div className="absolute inset-[-20%] grid grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2 p-2">
             {placeholderImages.map((image) => {
-              // Calculate random offsets and rotations for each tile
-              const rotation = Math.random() * 3 - 1.5; // -1.5 to 1.5 degrees
-              const scale = 0.95 + Math.random() * 0.1; // 0.95 to 1.05
-              const offsetX = Math.random() * 10 - 5; // -5px to 5px
-              const offsetY = Math.random() * 10 - 5; // -5px to 5px
-              
+              const rotation = Math.random() * 4 - 2; // -2 to 2 degrees
+              const scale = 0.9 + Math.random() * 0.2; // 0.9 to 1.1
+              const zIndex = Math.floor(Math.random() * 5); // Random z-index for overlap
+
               return (
-                <div 
-                  key={image.id} 
-                  className="relative aspect-[2/3] overflow-hidden rounded-md shadow-lg"
+                <div
+                  key={image.id}
+                  className="relative aspect-[2/3] overflow-hidden rounded shadow-md"
                   style={{
-                    transform: `rotate(${rotation}deg) scale(${scale}) translate(${offsetX}px, ${offsetY}px)`,
-                    transition: 'transform 0.3s ease-out',
+                    transform: `rotate(${rotation}deg) scale(${scale})`,
+                    transition: 'transform 0.5s ease-out',
+                    zIndex: zIndex, // Apply z-index
                   }}
                 >
-                  {/* 
-                    These divs will display a colored placeholder until images are added
-                    Replace these with real images by adding files to:
-                    /public/images/backgrounds/background-1.jpg, background-2.jpg, etc.
-                  */}
                   <div
                     className="absolute inset-0 bg-gradient-to-br"
                     style={{
-                      backgroundImage: `linear-gradient(to bottom right, 
-                        hsl(${(image.id * 20) % 360}, 70%, 30%), 
-                        hsl(${(image.id * 20 + 40) % 360}, 70%, 50%))`,
-                      transform: `scale(1.05)`,
+                      backgroundImage: `linear-gradient(to bottom right,
+                        hsl(${(image.id * 15) % 360}, 60%, 25%),
+                        hsl(${(image.id * 15 + 30) % 360}, 60%, 45%))`,
+                      transform: `scale(1.03)`, // Slight inner scale for border effect
+                      filter: 'brightness(0.8)', // Slightly darken images
                     }}
                   ></div>
                 </div>
