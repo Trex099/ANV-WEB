@@ -17,19 +17,28 @@ const App = () => {
     <div className="w-full min-h-screen flex flex-col select-none" aria-live="polite">
       {/* Top Interactive Bowl Section: h-screen and flex-shrink-0 to prevent shrinking */}
       <div className="relative w-full h-screen flex-shrink-0">
-        {/* Spline Diamond Heart Background */}
-        <div className="absolute inset-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-          <iframe 
-            src='https://my.spline.design/diamondheart-hbQN0gppfiSZommAeSl9XaMX/' 
-            frameBorder='0' 
-            width='100%' 
-            height='100%'
-            title="Diamond Heart Background"
-            className="absolute inset-0 w-full h-full"
-            style={{ pointerEvents: 'none' }}
-          />
+        {/* Create a split container for title and content */}
+        <div className="absolute top-0 left-0 w-full h-full flex flex-col z-10">
+          {/* Title area - reserve top space for the title */}
+          <div className="h-16 sm:h-20 w-full relative z-20">
+            {/* InteractiveBowlSection will place its own title here */}
+          </div>
+          
+          {/* Spline Diamond Heart - positioned below title, above bowl */}
+          <div className="flex-grow relative">
+            <iframe 
+              src='https://my.spline.design/diamondheart-hbQN0gppfiSZommAeSl9XaMX/' 
+              frameBorder='0' 
+              width='100%' 
+              height='100%'
+              title="Diamond Heart Background"
+              style={{ pointerEvents: 'none' }}
+            />
+          </div>
         </div>
-        <div className="relative z-10 w-full h-full"> {/* Wrapper to ensure bowl appears above background */}
+        
+        {/* Bowl section with normal z-index to ensure it appears over the Spline model */}
+        <div className="relative z-10 w-full h-full">
           <InteractiveBowlSection />
         </div>
       </div>
