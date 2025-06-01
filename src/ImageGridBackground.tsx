@@ -11,33 +11,62 @@ const generatePlaceholderImages = (count: number) => {
 };
 
 const ImageGridBackground: React.FC = () => {
-  const placeholderImages = generatePlaceholderImages(18); // 18 images for the grid
+  const placeholderImages = generatePlaceholderImages(24); // More images for a fuller grid
   
   return (
-    <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
+    <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none select-none -z-10">
       {/* Semi-transparent overlay */}
-      <div className="absolute inset-0 bg-black bg-opacity-60 z-10"></div>
+      <div className="absolute inset-0 bg-black bg-opacity-70 z-10"></div>
       
-      {/* Image grid */}
-      <div className="absolute inset-0 grid grid-cols-6 gap-1 p-1" style={{ opacity: 0.7 }}>
-        {placeholderImages.map((image) => (
-          <div key={image.id} className="relative aspect-[2/3] overflow-hidden">
-            {/* 
-              These divs will display a colored placeholder until images are added
-              Replace these with real images by adding files to:
-              /public/images/backgrounds/background-1.jpg, background-2.jpg, etc.
-            */}
-            <div
-              className="absolute inset-0 bg-gradient-to-br"
-              style={{
-                backgroundImage: `linear-gradient(to bottom right, 
-                  hsl(${(image.id * 20) % 360}, 70%, 30%), 
-                  hsl(${(image.id * 20 + 40) % 360}, 70%, 50%))`,
-                transform: `scale(1.05)`,
-              }}
-            ></div>
+      {/* Netflix-style perspective container */}
+      <div className="absolute inset-0" 
+           style={{ 
+             perspective: '1200px',
+             transformStyle: 'preserve-3d',
+             overflow: 'hidden',
+           }}>
+        <div className="absolute inset-0" 
+             style={{ 
+               transform: 'rotateX(12deg) translateY(5%) scale(1.3)',
+               transformOrigin: 'center top',
+             }}>
+          {/* Image grid with Netflix-style angled layout */}
+          <div className="absolute inset-0 grid grid-cols-6 md:grid-cols-8 gap-3 p-6">
+            {placeholderImages.map((image) => {
+              // Calculate random offsets and rotations for each tile
+              const rotation = Math.random() * 3 - 1.5; // -1.5 to 1.5 degrees
+              const scale = 0.95 + Math.random() * 0.1; // 0.95 to 1.05
+              const offsetX = Math.random() * 10 - 5; // -5px to 5px
+              const offsetY = Math.random() * 10 - 5; // -5px to 5px
+              
+              return (
+                <div 
+                  key={image.id} 
+                  className="relative aspect-[2/3] overflow-hidden rounded-md shadow-lg"
+                  style={{
+                    transform: `rotate(${rotation}deg) scale(${scale}) translate(${offsetX}px, ${offsetY}px)`,
+                    transition: 'transform 0.3s ease-out',
+                  }}
+                >
+                  {/* 
+                    These divs will display a colored placeholder until images are added
+                    Replace these with real images by adding files to:
+                    /public/images/backgrounds/background-1.jpg, background-2.jpg, etc.
+                  */}
+                  <div
+                    className="absolute inset-0 bg-gradient-to-br"
+                    style={{
+                      backgroundImage: `linear-gradient(to bottom right, 
+                        hsl(${(image.id * 20) % 360}, 70%, 30%), 
+                        hsl(${(image.id * 20 + 40) % 360}, 70%, 50%))`,
+                      transform: `scale(1.05)`,
+                    }}
+                  ></div>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ This directory is where you can place your custom background images for the Netf
    - `background-1.jpg`
    - `background-2.jpg`
    - `background-3.jpg`
-   - ...and so on up to `background-18.jpg`
+   - ...and so on up to `background-24.jpg`
 
 3. Place the files in this directory (`public/images/backgrounds/`)
 
@@ -21,8 +21,9 @@ This directory is where you can place your custom background images for the Netf
 
 ## Important Notes
 
-- The background has 18 image slots (a 6x3 grid)
-- Images will be automatically cropped and scaled to fit their grid cells
+- The background has 24 image slots (6 columns on mobile, 8 columns on larger screens)
+- Images will be automatically tilted and positioned to create the Netflix-style effect
+- The grid has a perspective effect that creates a "wall of media" look
 - For best results, use images with good contrast and clear subjects
 - Darker images work better as they'll blend well with the semi-transparent overlay
 

@@ -61,13 +61,13 @@ class ErrorBoundary extends Component<Props, State> {
             <h3 style={{ color: '#ffc0c0', marginTop: 0 }}>Error:</h3>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#f0f0f0', marginBottom: '20px' }}>
               <code>
-                {this.state.error && this.state.error.toString()}
+            {this.state.error && this.state.error.toString()}
               </code>
             </pre>
             <h3 style={{ color: '#ffc0c0' }}>Details (Component Stack):</h3>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#d0d0d0' }}>
               <code>
-                {this.state.errorInfo && this.state.errorInfo.componentStack}
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
               </code>
             </pre>
           </div>

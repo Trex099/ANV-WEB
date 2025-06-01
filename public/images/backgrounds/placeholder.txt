@@ -1,6 +1,6 @@
-This directory is for background images.
+This directory is for Netflix-style background images.
 
 Place your custom background images here with filenames:
-background-1.jpg, background-2.jpg, etc.
+background-1.jpg, background-2.jpg, etc. (up to background-24.jpg)
 
 See README.md for more details. 
