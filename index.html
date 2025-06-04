@@ -8,14 +8,51 @@
     <meta name="rendermode" content="hardware-accelerated">
     <title>Heartfelt Messages Bowl</title>
     
-    <!-- Preload critical assets -->
-    <link rel="preload" as="image" href="/images/netflix-grid/optimized/image-1.webp" type="image/webp">
-    <link rel="preload" as="image" href="/images/netflix-grid/optimized/image-2.webp" type="image/webp">
-    <link rel="preload" as="image" href="/images/netflix-grid/optimized/image-3.webp" type="image/webp">
-    <link rel="preload" as="image" href="/images/netflix-grid/optimized/image-4.webp" type="image/webp">
+    <!-- Preload critical WebP optimized images with high priority -->
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-1.webp" type="image/webp">
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-2.webp" type="image/webp">
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-3.webp" type="image/webp">
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-4.webp" type="image/webp">
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-5.webp" type="image/webp">
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-6.webp" type="image/webp">
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-7.webp" type="image/webp">
+    <link rel="preload" fetchpriority="high" as="image" href="/images/netflix-grid/optimized/image-8.webp" type="image/webp">
+    
+    <!-- Block rendering until critical images are loaded -->
+    <script>
+      // Create a list of critical images that must load before showing content
+      const criticalImages = [
+        '/images/netflix-grid/optimized/image-1.webp',
+        '/images/netflix-grid/optimized/image-2.webp',
+        '/images/netflix-grid/optimized/image-3.webp',
+        '/images/netflix-grid/optimized/image-4.webp'
+      ];
+      
+      // Set a flag to track loading status
+      window.__NETFLIX_GRID_IMAGES_LOADED = false;
+      
+      // Preload critical images and mark as ready
+      Promise.all(criticalImages.map(src => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = src;
+        });
+      })).then(() => {
+        window.__NETFLIX_GRID_IMAGES_LOADED = true;
+        document.documentElement.classList.add('critical-images-loaded');
+      });
+      
+      // Set a timeout in case images take too long
+      setTimeout(() => {
+        window.__NETFLIX_GRID_IMAGES_LOADED = true;
+        document.documentElement.classList.add('critical-images-loaded');
+      }, 1500);
+    </script>
     
     <!-- Preconnect to external resources -->
-    <link rel="preconnect" href="https://picsum.photos">
+    <link rel="preconnect" href="https://picsum.photos" crossorigin>
     <link rel="dns-prefetch" href="https://picsum.photos">
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -26,6 +63,16 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
             -webkit-font-smoothing: antialiased;
+        }
+        
+        /* Hide all content until critical images are loaded */
+        html:not(.critical-images-loaded) .netflix-background {
+            opacity: 0;
+        }
+        
+        /* Add fadein transition */
+        .netflix-background {
+            transition: opacity 0.4s ease-in;
         }
     </style>
 </head>

@@ -14,11 +14,37 @@
   backface-visibility: hidden;
   /* Added contain property for better performance */
   contain: strict;
+  /* Prevent any possible reflows */
+  isolation: isolate;
 }
 
 /* Remove the additional color overlay */
 .netflixBackground::after {
   display: none;
+}
+
+/* Loading state styles */
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0a0a0a 0%, #151515 50%, #0c0c0c 100%);
+  opacity: 0.7;
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: rgba(255, 255, 255, 0.7);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .perspectiveContainer {
@@ -38,6 +64,10 @@
   height: 110%;
   /* Added for better performance */
   contain: layout style;
+  /* Force hardware acceleration */
+  transform: translate3d(0, 0, 0);
+  /* Prevent sub-pixel rendering that can cause flickering */
+  will-change: transform;
 }
 
 .gridContainer {
@@ -50,8 +80,15 @@
   flex-direction: column;
   gap: 25px; /* Increased gap between rows for 4-row layout */
   justify-content: center; /* Center the 4 rows */
+  /* Force hardware acceleration */
+  transform-origin: center center;
+  /* Ensure no accidental repaints */
+  contain: layout style;
+  /* Prevent sub-pixel rendering issues */
+  will-change: transform;
 }
 
+/* Optimize animation startup */
 .posterRow {
   display: flex;
   transform-style: preserve-3d;
@@ -65,45 +102,10 @@
   opacity: 0;
   animation-fill-mode: both;
   transition: opacity 0.3s ease-out;
-}
-
-.posterItem {
-  width: 200px; /* Adjusted for better balance */
-  height: 300px; /* Adjusted for better balance */
-  flex-shrink: 0; 
-  background-size: cover;
-  background-position: center;
-  border-radius: 6px;
-  opacity: 0.8; /* Increased further for better visibility */
-  box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.7);
-  transform-style: preserve-3d;
-  transition: opacity 0.3s ease-out;
-  position: relative; 
-  /* Prevent image refreshes by forcing hardware acceleration */
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  -webkit-transform: translateZ(0) scale(1, 1);
-  /* Added for content containment */
-  contain: content;
-  /* Ensure images don't randomly refresh with more specific rendering properties */
-  image-rendering: high-quality;
-  text-rendering: optimizeSpeed;
-  /* Prevent image refreshing */
-  transform: translate3d(0, 0, 0);
-  will-change: transform;
-  /* Set loading priority for images */
-  background-origin: border-box;
-  /* Improve rendering of WebP images */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Fade in effect */
-  animation: fadeIn 0.5s ease-out forwards;
-  opacity: 0;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 0.8; }
+  /* Ensure stable layout */
+  contain: style layout;
+  /* Force consistent subpixel rendering to stop flickering */
+  transform: translateZ(0);
 }
 
 /* Classes that activate animations with performance optimization */
@@ -113,6 +115,8 @@
   animation-play-state: running; /* Ensure animation keeps running */
   opacity: 1;
   transition: opacity 0.5s ease-in;
+  /* Make the animation super smooth */
+  animation-timing-function: linear;
 }
 
 .posterRow.scrollRightActive {
@@ -121,15 +125,57 @@
   animation-play-state: running; /* Ensure animation keeps running */
   opacity: 1;
   transition: opacity 0.5s ease-in;
+  /* Make the animation super smooth */
+  animation-timing-function: linear;
 }
 
 /* Keep these for backwards compatibility but they don't immediately activate */
 .posterRow.scrollLeft {
   will-change: transform;
+  /* Ensure consistent width to prevent recalculation */
+  width: calc(100% + 100px);
 }
 
 .posterRow.scrollRight {
   will-change: transform;
+  /* Ensure consistent width to prevent recalculation */
+  width: calc(100% + 100px);
+}
+
+.posterItem {
+  width: 200px; /* Adjusted for better balance */
+  height: 300px; /* Adjusted for better balance */
+  flex-shrink: 0; 
+  background-size: cover;
+  background-position: center;
+  border-radius: 6px;
+  opacity: 0;
+  box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.7);
+  transform-style: preserve-3d;
+  position: relative; 
+  /* Prevent image refreshes by forcing hardware acceleration */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  /* Prevent flicker during animation */
+  contain: content;
+  /* Eliminate image refresh with superior rendering properties */
+  image-rendering: high-quality;
+  text-rendering: optimizeSpeed;
+  /* Set loading priority for images */
+  background-origin: border-box;
+  /* Improve rendering of WebP images */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Fade in effect with hardware acceleration */
+  animation: fadeIn 0.5s ease-out forwards;
+  /* Prevents any chance of re-rendering */
+  will-change: transform, opacity;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 0.8; }
 }
 
 /* Row-specific speed adjustments */
@@ -157,6 +203,17 @@
   animation-duration: 75s;
 }
 
+/* Optimize animation rendering with Transform3D for guaranteed GPU acceleration */
+@keyframes scrollLeftAnimation {
+  0% { transform: translate3d(0%, 0, 0); }
+  100% { transform: translate3d(-100%, 0, 0); }
+}
+
+@keyframes scrollRightAnimation {
+  0% { transform: translate3d(-100%, 0, 0); }
+  100% { transform: translate3d(0%, 0, 0); }
+}
+
 /* Mobile performance optimizations */
 .netflix-grid-mobile .posterItem {
   /* Simplified transforms for mobile */
@@ -169,17 +226,6 @@
   .posterRow.scrollLeft, .posterRow.scrollRight {
     animation-duration: 180s !important; /* Much slower for reduced motion */
   }
-}
-
-/* Optimize animation rendering with just transform property */
-@keyframes scrollLeftAnimation {
-  0% { transform: translateX(0%); }
-  100% { transform: translateX(-100%); }
-}
-
-@keyframes scrollRightAnimation {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(0%); }
 }
 
 /* --- Responsive Adjustments --- */
@@ -198,19 +244,18 @@
   .posterItem { 
     width: 240px;
     height: 360px;
-    opacity: 0.85;
   }
-  /* Faster animations specifically for desktop */
-  .posterRow.scrollLeft, .posterRow.scrollRight {
+  /* Faster animations specifically for desktop with precise timing */
+  .posterRow.scrollLeftActive, .posterRow.scrollRightActive {
     animation-duration: 90s;
   }
-  .posterRow:nth-child(2).scrollLeft, .posterRow:nth-child(2).scrollRight {
+  .posterRow:nth-child(2).scrollLeftActive, .posterRow:nth-child(2).scrollRightActive {
     animation-duration: 83s;
   }
-  .posterRow:nth-child(3).scrollLeft, .posterRow:nth-child(3).scrollRight {
+  .posterRow:nth-child(3).scrollLeftActive, .posterRow:nth-child(3).scrollRightActive {
     animation-duration: 87s;
   }
-  .posterRow:nth-child(4).scrollLeft, .posterRow:nth-child(4).scrollRight {
+  .posterRow:nth-child(4).scrollLeftActive, .posterRow:nth-child(4).scrollRightActive {
     animation-duration: 80s;
   }
 }
@@ -283,29 +328,4 @@
     width: 100px;
     height: 150px;
   }
-}
-
-/* Loading state styles */
-.loadingOverlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #0a0a0a 0%, #151515 50%, #0c0c0c 100%);
-  opacity: 0.5;
-}
-
-.loadingSpinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  border-top-color: rgba(255, 255, 255, 0.5);
-  animation: spin 1s linear infinite;
-  opacity: 0;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 } 

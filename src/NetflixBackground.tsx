@@ -12,6 +12,14 @@ interface NetflixBackgroundProps {
   imageUrls?: string[];
 }
 
+// Create a global constant that will never change once initialized
+// This maintains perfect stability across renders
+const GLOBAL_IMAGE_MANIFEST = {
+  customImages: [] as string[],
+  loaded: false,
+  initialCheck: false
+};
+
 // A simple hook to get window size
 const useWindowSize = () => {
   const [windowSize, setWindowSize] = useState<{
@@ -118,129 +126,164 @@ const useIsInViewport = (ref: React.RefObject<HTMLDivElement | null>) => {
   return isIntersecting;
 };
 
-// Custom hook to load and scan directory for images
-const useCustomImages = () => {
-  const [customImages, setCustomImages] = useState<string[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  
-  // Check for cached images first to improve load time and avoid refreshes
-  const cachedImageList = useMemo(() => {
-    try {
-      const cachedImages = sessionStorage.getItem('netflix-grid-custom-images');
-      if (cachedImages) {
-        return JSON.parse(cachedImages);
+// This function checks if an image exists, with caching for performance
+// It's defined outside of hooks to maintain consistent reference
+const checkImageExists = async (url: string): Promise<boolean> => {
+  // Use a global cache key that persists across sessions
+  const cacheKey = `img-check-${url}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached === 'true';
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      localStorage.setItem(cacheKey, 'true');
+      resolve(true);
+    };
+    img.onerror = () => {
+      localStorage.setItem(cacheKey, 'false');
+      resolve(false);
+    };
+    img.src = url;
+  });
+};
+
+// Generate a manifest of all available custom images (runs once at module level)
+const generateImageManifest = async () => {
+  // Check if we've already generated the manifest
+  if (GLOBAL_IMAGE_MANIFEST.initialCheck) {
+    return GLOBAL_IMAGE_MANIFEST.customImages;
+  }
+
+  // Mark as checked to prevent duplicate work
+  GLOBAL_IMAGE_MANIFEST.initialCheck = true;
+
+  // Try to load manifest from storage first (fastest path)
+  try {
+    const cachedManifest = localStorage.getItem('netflix-grid-manifest');
+    if (cachedManifest) {
+      const parsed = JSON.parse(cachedManifest);
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+        GLOBAL_IMAGE_MANIFEST.customImages = parsed;
+        GLOBAL_IMAGE_MANIFEST.loaded = true;
+        return parsed;
       }
-    } catch (e) {
-      console.error('Error loading cached images:', e);
     }
-    return null;
-  }, []);
+  } catch (e) {
+    console.error('Error loading image manifest:', e);
+  }
 
-  // This function will check if an image URL is valid
-  const checkImageURL = useCallback(async (url: string): Promise<boolean> => {
-    // Performance improvement: Check sessionStorage first
-    const cacheKey = `img-check-${url}`;
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) return cached === 'true';
+  // If no cache, check all possible images
+  const customImages: string[] = [];
+  const checkPromises: Promise<void>[] = [];
+  const foundIndices = new Set<number>();
+
+  // Check all possible image indices
+  for (let i = 1; i <= 32; i++) {
+    const possibleExtensions = ['webp', 'jpg', 'jpeg', 'png'];
     
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        sessionStorage.setItem(cacheKey, 'true');
-        resolve(true);
-      };
-      img.onerror = () => {
-        sessionStorage.setItem(cacheKey, 'false');
-        resolve(false);
-      };
-      img.src = url;
+    // First priority: Check optimized WebP images
+    const optimizedPath = `/images/netflix-grid/optimized/image-${i}.webp`;
+    const checkOptimized = checkImageExists(optimizedPath).then(exists => {
+      if (exists) {
+        customImages.push(optimizedPath);
+        foundIndices.add(i);
+      }
     });
-  }, []);
+    checkPromises.push(checkOptimized);
+    
+    // Only check original if optimized wasn't found
+    const checkOriginals = async () => {
+      if (foundIndices.has(i)) return;
+      
+      for (const ext of possibleExtensions) {
+        const path = `/images/netflix-grid/image-${i}.${ext}`;
+        const exists = await checkImageExists(path);
+        if (exists) {
+          customImages.push(path);
+          foundIndices.add(i);
+          break;
+        }
+      }
+    };
+    
+    const origCheck = checkOptimized.then(() => checkOriginals());
+    checkPromises.push(origCheck);
+  }
 
+  // Wait for all checks to complete
+  await Promise.all(checkPromises);
+
+  // For missing indices, use STABLE fallback images (crucial for consistency)
+  for (let i = 1; i <= 32; i++) {
+    if (!foundIndices.has(i)) {
+      // Use a deterministic mapping to fallback images
+      // The crucial part is this must always return the SAME image for the SAME index
+      const fallbackIndex = (i % fallbackImages.length);
+      customImages.push(fallbackImages[fallbackIndex]);
+    }
+  }
+
+  // Cache manifest for future use
+  try {
+    localStorage.setItem('netflix-grid-manifest', JSON.stringify(customImages));
+  } catch (e) {
+    console.error('Error saving image manifest:', e);
+  }
+
+  // Update global reference for future use
+  GLOBAL_IMAGE_MANIFEST.customImages = customImages;
+  GLOBAL_IMAGE_MANIFEST.loaded = true;
+  
+  return customImages;
+};
+
+// Call this immediately to start loading on page load
+generateImageManifest().catch(console.error);
+
+// Custom hook to provide images from the manifest
+const useImageManifest = (propImages?: string[]) => {
+  // If props provided, always use those first
+  if (propImages && propImages.length > 0) {
+    return { 
+      images: propImages, 
+      isLoaded: true 
+    };
+  }
+  
+  const [isLoaded, setIsLoaded] = useState(GLOBAL_IMAGE_MANIFEST.loaded);
+  const [images, setImages] = useState(GLOBAL_IMAGE_MANIFEST.customImages);
+  
   useEffect(() => {
-    // Use cached images if available
-    if (cachedImageList) {
-      setCustomImages(cachedImageList);
+    // If manifest is already loaded, use it immediately
+    if (GLOBAL_IMAGE_MANIFEST.loaded) {
+      setImages(GLOBAL_IMAGE_MANIFEST.customImages);
       setIsLoaded(true);
       return;
     }
     
-    // Function to load custom images from directory
-    const loadCustomImages = async () => {
-      try {
-        // In a real app, this would ideally be handled server-side
-        // Here we'll use a pattern to look for images
-        const customImageList: string[] = [];
-        const foundIndices: Set<number> = new Set();
-        
-        // Look for sequentially named images in the custom folder
-        for (let i = 1; i <= 32; i++) {
-          const possibleExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-          let foundImage = false;
-          
-          for (const ext of possibleExtensions) {
-            // Try the optimized version first (WebP format)
-            const optimizedPath = `/images/netflix-grid/optimized/image-${i}.webp`;
-            let exists = await checkImageURL(optimizedPath);
-            
-            if (exists) {
-              customImageList.push(optimizedPath);
-              foundIndices.add(i);
-              foundImage = true;
-              break;
-            }
-            
-            // If optimized isn't available, check original
-            const imagePath = `/images/netflix-grid/image-${i}.${ext}`;
-            exists = await checkImageURL(imagePath);
-            
-            if (exists) {
-              customImageList.push(imagePath);
-              foundIndices.add(i);
-              foundImage = true;
-              break;
-            }
-          }
-          
-          // Don't block UI thread for too long when checking images
-          if (i % 4 === 0) {
-            await new Promise(resolve => setTimeout(resolve, 0));
-          }
-        }
-        
-        // Only add fallback images for indices that weren't found
-        // This ensures consistent image positions even if custom images are added later
-        let fallbackIndex = 0;
-        for (let i = 1; i <= 32; i++) {
-          if (!foundIndices.has(i)) {
-            // Use consistent, deterministic fallback image assignment
-            const picSumId = ((i * 37) % 200) + 1; // Deterministic ID generation
-            customImageList.push(`https://picsum.photos/id/${picSumId}/350/525`);
-            fallbackIndex++;
-          }
-        }
-        
-        // Cache the result for future loads
-        try {
-          sessionStorage.setItem('netflix-grid-custom-images', JSON.stringify(customImageList));
-        } catch (e) {
-          console.error('Error caching image list:', e);
-        }
-        
-        setCustomImages(customImageList);
-      } catch (error) {
-        console.error("Failed to load custom images:", error);
-        // Fall back to default image set if there's an error
-        setCustomImages(fallbackImages);
-      } finally {
-        setIsLoaded(true);
-      }
+    // Otherwise wait for the manifest generation to complete
+    const loadManifest = async () => {
+      const manifest = await generateImageManifest();
+      setImages(manifest);
+      setIsLoaded(true);
     };
-
-    loadCustomImages();
-  }, [cachedImageList, checkImageURL]);
-
-  return { customImages, isCustomImagesLoaded: isLoaded };
+    
+    loadManifest().catch(console.error);
+    
+    // Check every 100ms if the manifest is loaded (for race conditions)
+    const interval = setInterval(() => {
+      if (GLOBAL_IMAGE_MANIFEST.loaded) {
+        setImages(GLOBAL_IMAGE_MANIFEST.customImages);
+        setIsLoaded(true);
+        clearInterval(interval);
+      }
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  return { images, isLoaded };
 };
 
 // Custom hook for aggressively preloading images
@@ -334,6 +377,7 @@ const PosterRow = React.memo(({
         transform: `translateZ(${zTranslate}px) translateX(${isScrollLeft ? '0px' : '-20px'})`,
         willChange: 'transform'
       }}
+      data-row-index={rowIndex}
     >
       {posters.map((poster, posterIndex) => {
         // Deterministic, non-random transformations
@@ -359,10 +403,21 @@ const PosterRow = React.memo(({
             aria-label={poster.altText}
             data-row={rowIndex}
             data-position={posterIndex}
+            data-image-url={poster.imageUrl}
           />
         );
       })}
     </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  // We only want to re-render if essential props change
+  return (
+    prevProps.rowIndex === nextProps.rowIndex &&
+    prevProps.isScrollLeft === nextProps.isScrollLeft &&
+    prevProps.zTranslate === nextProps.zTranslate &&
+    prevProps.posters === nextProps.posters &&
+    prevProps.isMobile === nextProps.isMobile
   );
 });
 
@@ -375,25 +430,31 @@ const LoadingState = () => (
   </div>
 );
 
-const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
+const NetflixBackground: React.FC<NetflixBackgroundProps> = React.memo(({
   imageUrls,
 }) => {
   const { width: windowWidth } = useWindowSize();
   const backgroundRef = useRef<HTMLDivElement>(null);
   const isInViewport = useIsInViewport(backgroundRef);
-  const [imagesLoaded, setImagesLoaded] = useState(false);
-  const { customImages, isCustomImagesLoaded } = useCustomImages();
+  const [renderContent, setRenderContent] = useState(false);
+  
+  // Use the manifest-based approach instead of dynamic loading
+  const { images: manifestImages, isLoaded: manifestLoaded } = useImageManifest(imageUrls);
   
   // Detect if we're on desktop for optimizations
   const isDesktop = useMemo(() => (windowWidth || 0) >= 1025, [windowWidth]);
   const isMobile = useMemo(() => (windowWidth || 0) < 768, [windowWidth]);
   
-  // Set images as loaded when custom images are ready
+  // This ensures we have the manifest loaded before showing content
   useEffect(() => {
-    if (isCustomImagesLoaded) {
-      setImagesLoaded(true);
+    if (manifestLoaded) {
+      // Small delay to ensure smooth transition
+      const timer = setTimeout(() => {
+        setRenderContent(true);
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [isCustomImagesLoaded]);
+  }, [manifestLoaded]);
 
   // Memoize configuration to prevent useless recalculations
   const { rowConfig } = useMemo(() => {
@@ -407,9 +468,6 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
                          windowWidth < 1024 ? 8 :
                          windowWidth < 1440 ? 9 : 10;
     
-    // Determine total visible count (approximate)
-    const totalVisible = rowCount * postersPerRow;
-    
     // Create configuration for each row - important to keep this stable
     const rowConfig = Array(rowCount).fill(0).map((_, index) => ({
       // Alternating scroll direction
@@ -420,65 +478,63 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
     
     return { 
       rowConfig,
-      totalVisiblePosters: totalVisible
+      totalVisiblePosters: rowCount * postersPerRow
     };
   }, [windowWidth]);
-
-  // Memoize images to ensure stability
-  const availableImages = useMemo(() => {
-    if (imageUrls && imageUrls.length > 0) {
-      return imageUrls;
-    }
-    
-    if (customImages.length > 0) {
-      return customImages;
-    }
-    
-    return fallbackImages;
-  }, [imageUrls, customImages]);
   
-  // Initialize poster arrays only once across renders
-  const rowPosters = useMemo(() => {
-    return rowConfig.map((config, rowIndex) => {
-      // Generate a stable cache key that won't change between renders
-      const cacheKey = `${availableImages.length}-row-${rowIndex}-${config.posterCount}`;
+  // Aggressively preload images
+  useImagePreloader(manifestImages);
 
-      // Return cached posters if available to prevent refreshes
+  // Initialize poster arrays only once across renders with perfect stability
+  const rowPosters = useMemo(() => {
+    // Don't create rows until we have the images
+    if (!manifestLoaded || manifestImages.length === 0) {
+      return [];
+    }
+    
+    return rowConfig.map((config, rowIndex) => {
+      // Generate a stable, permanent cache key that won't change
+      const cacheKey = `stable-row-${rowIndex}-${config.posterCount}`;
+      
+      // If we have a cached version, use it for perfect stability
       if (POSTER_CACHE.has(cacheKey)) {
         return POSTER_CACHE.get(cacheKey)!;
       }
       
-      // Calculate stable multiplier
+      // Calculate stable multiplier and poster count
       const posterMultiplier = isDesktop ? 3 : 2.5;
       const totalPosters = Math.ceil(config.posterCount * posterMultiplier);
       
-      // Create new posters with stable IDs and positions
+      // Create new posters with truly stable IDs and positions
       const rowPosters: Poster[] = [];
-      // Use a stable, deterministic starting offset based on row
-      const startOffset = (rowIndex * 7) % Math.max(1, availableImages.length);
+      
+      // Use a deterministic, stable offset based on row
+      const startOffset = (rowIndex * 7) % Math.max(1, manifestImages.length);
       
       for (let i = 0; i < totalPosters; i++) {
-        // Ensure consistent image selection for the same position
-        const imageIndex = (startOffset + i) % availableImages.length;
+        // Ensure completely consistent image selection
+        // This is the critical part - we need to use the same formula every time
+        const imageIndex = (startOffset + i) % manifestImages.length;
+        const imageUrl = manifestImages[imageIndex];
+        
+        // Create truly stable IDs that won't change between renders
+        // The critical part is including both rowIndex and i in the ID
+        const stableId = `stable-poster-${rowIndex}-${i}-${imageIndex}`;
+        
         rowPosters.push({
-          // Create a stable ID that won't change between renders
-          id: `poster-${rowIndex}-${i}-${imageIndex}`,
-          imageUrl: availableImages[imageIndex],
+          id: stableId,
+          imageUrl,
           altText: `Poster ${i + 1} in row ${rowIndex + 1}`,
         });
       }
       
-      // Cache and return
+      // Cache and return - this is important as we never want these to change
       POSTER_CACHE.set(cacheKey, rowPosters);
-      
-      // Save cache to sessionStorage occasionally
-      if (rowIndex === 0) {
-        savePosterCache(POSTER_CACHE);
-      }
+      savePosterCache(POSTER_CACHE);
       
       return rowPosters;
     });
-  }, [availableImages, rowConfig, isDesktop]);
+  }, [manifestLoaded, manifestImages, rowConfig, isDesktop]);
 
   // Optimize mobile performance by disabling some animations
   useEffect(() => {
@@ -494,29 +550,13 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
     };
   }, [isMobile]);
 
-  // After the useCustomImages hook, add this new hook:
-  useImagePreloader(availableImages);
-
-  // Use a smaller and faster initial set of images
-  const initialLoadRef = useRef<boolean>(false);
-  
-  useEffect(() => {
-    if (!initialLoadRef.current && availableImages.length > 0) {
-      initialLoadRef.current = true;
-      // Force fast display
-      setTimeout(() => {
-        setImagesLoaded(true);
-      }, 100);
-    }
-  }, [availableImages]);
-
-  if (!imagesLoaded) {
+  if (!renderContent || !manifestLoaded || rowPosters.length === 0) {
     // More responsive loading state
     return <LoadingState />;
   }
 
   return (
-    <div ref={backgroundRef} className={styles.netflixBackground}>
+    <div ref={backgroundRef} className={styles.netflixBackground} aria-hidden="true">
       <div className={styles.perspectiveContainer}>
         <div className={styles.gridContainer}>
           {rowConfig.map((config, rowIndex) => {
@@ -526,7 +566,7 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
             
             return (
               <PosterRow
-                key={`row-${rowIndex}`}
+                key={`permanent-row-${rowIndex}`} // Use truly stable keys
                 rowIndex={rowIndex}
                 isScrollLeft={config.isScrollLeft}
                 zTranslate={zTranslate}
@@ -539,7 +579,7 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
       </div>
     </div>
   );
-};
+});
 
 // Prevent unnecessary re-renders with memo
 export default React.memo(NetflixBackground); 
