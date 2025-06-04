@@ -1,0 +1,14 @@
+This is a placeholder file to demonstrate the correct folder location.
+
+To use your own images in the Netflix-style background:
+
+1. Create image files named "image-1.jpg", "image-2.jpg", etc.
+2. Place them in this folder
+3. Make sure they follow the 2:3 aspect ratio (e.g., 240×360px)
+4. Add up to 24-32 images for the best variety
+
+Example file structure:
+/images/netflix-grid/image-1.jpg
+/images/netflix-grid/image-2.jpg
+/images/netflix-grid/image-3.jpg
+...etc. 
