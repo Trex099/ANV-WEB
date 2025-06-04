@@ -6,25 +6,17 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  /* Replace pure black with a vibrant deep gradient background */
-  background: linear-gradient(135deg, #1a0f3d 0%, #270d4a 50%, #430f57 100%);
+  /* Return to black but add a subtle dark gradient to empty areas */
+  background: linear-gradient(135deg, #0a0a0a 0%, #151515 50%, #0c0c0c 100%);
   z-index: -1; /* Ensure it's behind other content */
   /* Hardware acceleration hints */
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
 }
 
+/* Remove the additional color overlay */
 .netflixBackground::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  /* Lighter gradient to make images more visible */
-  background: linear-gradient(
-    0deg,
-    rgba(30, 11, 59, 0.4) 0%,
-    rgba(65, 13, 81, 0.2) 100%
-  );
-  z-index: 1;
+  display: none;
 }
 
 .perspectiveContainer {
