@@ -179,8 +179,8 @@ const useCustomImages = () => {
           let foundImage = false;
           
           for (const ext of possibleExtensions) {
-            // Try the optimized version first
-            const optimizedPath = `/images/netflix-grid/optimized/image-${i}.jpg`;
+            // Try the optimized version first (WebP format)
+            const optimizedPath = `/images/netflix-grid/optimized/image-${i}.webp`;
             let exists = await checkImageURL(optimizedPath);
             
             if (exists) {
@@ -241,6 +241,56 @@ const useCustomImages = () => {
   }, [cachedImageList, checkImageURL]);
 
   return { customImages, isCustomImagesLoaded: isLoaded };
+};
+
+// Custom hook for aggressively preloading images
+const useImagePreloader = (images: string[]) => {
+  useEffect(() => {
+    // Skip if no images
+    if (!images || images.length === 0) return;
+    
+    // Check if we've already preloaded in this session
+    const preloadKey = 'netflix-grid-preloaded';
+    const hasPreloaded = sessionStorage.getItem(preloadKey);
+    if (hasPreloaded) return;
+    
+    // Function to preload a single image
+    const preloadImage = (src: string): Promise<void> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // Continue even if error
+        img.src = src;
+      });
+    };
+    
+    // Preload in batches to avoid overwhelming browser
+    const preloadBatch = async (batch: string[]) => {
+      const promises = batch.map(src => preloadImage(src));
+      await Promise.all(promises);
+    };
+    
+    // Start preloading
+    const batchSize = 5;
+    const preloadAll = async () => {
+      // First preload the first visible images with high priority
+      const firstBatch = images.slice(0, 10);
+      await preloadBatch(firstBatch);
+      
+      // Then preload the rest in background
+      for (let i = 10; i < images.length; i += batchSize) {
+        const batch = images.slice(i, i + batchSize);
+        // Small delay to avoid blocking main thread
+        await new Promise(r => setTimeout(r, 100));
+        preloadBatch(batch).catch(() => {}); // Ignore errors in background loading
+      }
+      
+      // Mark as preloaded
+      sessionStorage.setItem(preloadKey, 'true');
+    };
+    
+    preloadAll().catch(console.error);
+  }, [images]);
 };
 
 // PosterRow component to minimize re-renders
@@ -413,6 +463,9 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
       document.body.classList.remove('netflix-grid-mobile');
     };
   }, [isMobile]);
+
+  // After the useCustomImages hook, add this new hook:
+  useImagePreloader(availableImages);
 
   if (!imagesLoaded) {
     // Simple loading state

@@ -34,13 +34,13 @@ async function optimizeImages() {
       const stats = await fs.stat(inputPath);
       const fileSizeInMB = stats.size / (1024 * 1024);
       
-      // Create consistent output name with jpg extension
+      // Create consistent output name with webp extension
       const baseName = path.parse(file).name;
-      const outputPath = path.join(OUTPUT_DIR, `${baseName}.jpg`);
+      const outputPath = path.join(OUTPUT_DIR, `${baseName}.webp`);
       
       console.log(`Processing ${file} (${fileSizeInMB.toFixed(2)}MB)...`);
       
-      // Use sharp to resize and optimize image
+      // Use sharp to resize and optimize image as WebP
       await sharp(inputPath)
         .resize({
           width: TARGET_SIZE,
@@ -48,7 +48,11 @@ async function optimizeImages() {
           fit: 'cover',
           position: 'centre'
         })
-        .jpeg({ quality: 75 }) // Optimize as JPEG with 75% quality
+        .webp({ 
+          quality: 80,    // WebP quality (80% gives excellent results with small size)
+          effort: 6,      // Higher compression effort (0-6)
+          lossless: false // Use lossy compression for smaller files
+        })
         .toFile(outputPath);
         
       const newStats = await fs.stat(outputPath);
