@@ -6,7 +6,8 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #000000; /* Pure black background like Netflix */
+  /* Replace pure black with a vibrant deep gradient background */
+  background: linear-gradient(135deg, #1a0f3d 0%, #270d4a 50%, #430f57 100%);
   z-index: -1; /* Ensure it's behind other content */
   /* Hardware acceleration hints */
   transform: translate3d(0, 0, 0);
@@ -20,8 +21,8 @@
   /* Lighter gradient to make images more visible */
   background: linear-gradient(
     0deg,
-    rgba(0, 0, 0, 0.6) 0%,
-    rgba(0, 0, 0, 0.3) 100%
+    rgba(30, 11, 59, 0.4) 0%,
+    rgba(65, 13, 81, 0.2) 100%
   );
   z-index: 1;
 }
@@ -29,29 +30,35 @@
 .perspectiveContainer {
   width: 100%;
   height: 100%;
-  perspective: 1200px;
+  perspective: 1300px; /* Increased perspective */
   transform-style: preserve-3d;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  /* Fill black space by expanding container */
+  position: absolute;
+  top: -10%; /* Extend beyond top edge to fill black space */
+  left: -5%;
+  width: 110%;
+  height: 120%;
 }
 
 .gridContainer {
-  width: 170%; /* Wider for better screen coverage */
-  height: 170%; /* Taller for better screen coverage */
+  width: 200%; /* Even wider for better screen coverage */
+  height: 200%; /* Taller for better screen coverage */
   transform-style: preserve-3d;
   /* Adjusted for better angle and visibility */
-  transform: rotateX(22deg) translateY(-12%) scale(1.05); 
+  transform: rotateX(20deg) translateY(-12%) scale(1.1); 
   display: flex;
   flex-direction: column;
-  gap: 15px; /* Gap between rows */
+  gap: 20px; /* Increased gap between rows */
 }
 
 .posterRow {
   display: flex;
   transform-style: preserve-3d;
-  gap: 15px; /* Gap between posters */
+  gap: 20px; /* Increased gap between posters */
   /* Hardware acceleration hints */
   will-change: transform;
 }
@@ -61,31 +68,37 @@
 }
 
 .posterItem {
-  width: 180px; 
-  height: 270px; 
+  width: 220px; /* Increased size */
+  height: 330px; /* Increased size */
   flex-shrink: 0; 
   background-size: cover;
   background-position: center;
-  border-radius: 4px;
-  opacity: 0.65; /* Increased from 0.45 for better visibility */
-  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.7);
+  border-radius: 6px; /* Slightly increased radius */
+  opacity: 0.75; /* Increased from 0.65 for better visibility */
+  box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.7); /* Enhanced shadow */
   transform-style: preserve-3d;
   transition: opacity 0.3s ease-out;
   position: relative; 
+  /* Prevent image refreshes by forcing hardware acceleration */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-transform: translateZ(0) scale(1, 1);
 }
 
 .posterItem:hover {
-  opacity: 0.95; /* Increased for better visibility */
+  opacity: 0.95;
   transform: scale(1.05);
 }
 
-/* Much faster animations for all devices */
+/* Smoother animations with will-change for upcoming frames */
 .posterRow.scrollLeft {
-  animation: scrollLeftAnimation 80s linear infinite; /* Faster animation */
+  animation: scrollLeftAnimation 85s linear infinite;
+  will-change: transform;
 }
 
 .posterRow.scrollRight {
-  animation: scrollRightAnimation 80s linear infinite; /* Faster animation */
+  animation: scrollRightAnimation 85s linear infinite;
+  will-change: transform;
 }
 
 /* Row-specific speed adjustments */
@@ -99,6 +112,7 @@
   animation-duration: 70s; /* Even faster for 2nd and 4th rows */
 }
 
+/* Optimize animation rendering with just transform property */
 @keyframes scrollLeftAnimation {
   from { transform: translateX(0%); }
   to { transform: translateX(-100%); }
@@ -113,20 +127,24 @@
 
 /* Desktop */
 @media (min-width: 1025px) {
-  .perspectiveContainer { perspective: 1300px; }
+  .perspectiveContainer { 
+    perspective: 1400px;
+    top: -15%; /* More coverage on desktop */
+    height: 130%;
+  }
   .gridContainer { 
-    transform: rotateX(25deg) translateY(-15%) scale(1.1);
-    width: 190%; /* Wider for PC to fill more of the screen */
-    height: 180%;
+    transform: rotateX(22deg) translateY(-15%) scale(1.2);
+    width: 220%; /* Wider for PC to fill more of the screen */
+    height: 220%;
   }
   .posterItem { 
-    width: 180px; 
-    height: 270px;
-    opacity: 0.75; /* Higher opacity for PC */
+    width: 240px; /* Even larger for desktop */
+    height: 360px;
+    opacity: 0.85; /* Higher opacity for PC */
   }
   /* Faster animations specifically for desktop */
   .posterRow.scrollLeft, .posterRow.scrollRight {
-    animation-duration: 60s;
+    animation-duration: 65s;
   }
   .posterRow:nth-child(2).scrollLeft,
   .posterRow:nth-child(4).scrollLeft,
@@ -138,50 +156,59 @@
 
 /* Tablet */
 @media (max-width: 1024px) {
-  .perspectiveContainer { perspective: 1100px; }
-  .gridContainer { transform: rotateX(22deg) translateY(-10%) scale(0.95); gap: 12px; }
-  .posterItem { width: 140px; height: 210px; }
+  .perspectiveContainer { 
+    perspective: 1200px;
+    top: -5%;
+  }
+  .gridContainer { transform: rotateX(20deg) translateY(-10%) scale(1); gap: 15px; }
+  .posterItem { width: 180px; height: 270px; }
   .posterRow.scrollLeft, .posterRow.scrollRight {
-    animation-duration: 70s; /* Faster than before (was 300s) */
+    animation-duration: 75s;
   }
 }
 
 /* Mobile */
 @media (max-width: 768px) {
-  .perspectiveContainer { perspective: 900px; }
-  .gridContainer { transform: rotateX(20deg) translateY(-5%) scale(0.9); gap: 10px; }
+  .perspectiveContainer { 
+    perspective: 1000px; 
+    top: -5%;
+  }
+  .gridContainer { transform: rotateX(18deg) translateY(-5%) scale(0.9); gap: 12px; }
   .posterItem { 
-    width: 110px; 
-    height: 165px; 
-    opacity: 0.65;
-    box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.6);
+    width: 130px; 
+    height: 195px; 
+    opacity: 0.75;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.6);
   }
   /* Disable hover effects on mobile for better performance */
   .posterItem:hover { 
     transform: none;
-    opacity: 0.85;
+    opacity: 0.9;
   }
   .posterRow.scrollLeft, .posterRow.scrollRight {
-    animation-duration: 90s; /* Faster than before (was 360s) */
+    animation-duration: 90s;
   }
 }
 
 /* Small Mobile */
 @media (max-width: 480px) {
-  .perspectiveContainer { perspective: 800px; }
+  .perspectiveContainer { 
+    perspective: 900px;
+    top: -2%;
+  }
   .gridContainer { 
-    transform: rotateX(18deg) translateY(-2%) scale(0.9); 
-    gap: 8px; 
+    transform: rotateX(16deg) translateY(-2%) scale(0.9); 
+    gap: 10px; 
   }
   .posterItem { 
-    width: 90px; 
-    height: 135px; 
-    opacity: 0.7; /* Higher opacity for small screens */
-    border-radius: 2px;
-    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.5);
+    width: 110px; 
+    height: 165px; 
+    opacity: 0.8; /* Higher opacity for small screens */
+    border-radius: 4px;
+    box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.5);
   }
   .posterRow.scrollLeft, .posterRow.scrollRight {
-    animation-duration: 100s; /* Faster than before (was 220s or disabled) */
+    animation-duration: 100s;
   }
   /* Don't completely disable animations on small screens anymore */
   @media (prefers-reduced-motion: reduce) {
