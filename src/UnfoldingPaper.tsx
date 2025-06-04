@@ -100,15 +100,15 @@ const PaperMesh = (props: {
     if (!tl.current) {
       console.log("PaperMesh Effect: Creating new GSAP timeline instance.");
       newTimelineInstanceCreated = true;
-      tl.current = gsap.timeline({
-        paused: true,
+    tl.current = gsap.timeline({ 
+        paused: true, 
         onComplete: () => {
           console.log("PaperMesh GSAP: Timeline onComplete. isUnfolding:", props.isUnfolding, "isParentAnimating:", props.isParentAnimating);
           // Only call parent's onAnimationComplete if it was an actual unfold animation sequence
           if (props.isUnfolding && props.isParentAnimating) {
             props.onAnimationComplete();
           }
-        },
+        }, 
         onReverseComplete: () => {
           console.log("PaperMesh GSAP: Timeline onReverseComplete. isUnfolding:", props.isUnfolding, "isParentAnimating:", props.isParentAnimating);
           // Only call parent's onAnimationComplete if it was an actual fold animation sequence
@@ -119,7 +119,7 @@ const PaperMesh = (props: {
         onError: (e) => {
             console.error("PaperMesh GSAP: Error in timeline", e);
         }
-      });
+    });
 
       // --- Define animation from FOLDED to UNFOLDED ---
       // Position segments for pivot points at their edges (only needs to be done once when segments are defined)
@@ -128,32 +128,32 @@ const PaperMesh = (props: {
       segments.trSeg.position.set(QUARTER_PAPER_WIDTH, HALF_PAPER_HEIGHT / 2, 0.01);
       segments.brSeg.position.set(QUARTER_PAPER_WIDTH, -HALF_PAPER_HEIGHT / 2, 0);
 
-      // Step 1: Unfold top segments (TL and TR)
-      tl.current.to([segments.tlSeg.rotation, segments.trSeg.rotation], {
-        x: 0,
-        duration: FOLD_ANIMATION_DURATION,
-        ease: 'power3.inOut',
-        stagger: 0.05,
-      }, "+=0.1");
-      tl.current.to([segments.tlSeg.position, segments.trSeg.position], {
+    // Step 1: Unfold top segments (TL and TR)
+    tl.current.to([segments.tlSeg.rotation, segments.trSeg.rotation], {
+      x: 0, 
+      duration: FOLD_ANIMATION_DURATION,
+      ease: 'power3.inOut',
+      stagger: 0.05,
+    }, "+=0.1"); 
+    tl.current.to([segments.tlSeg.position, segments.trSeg.position], {
         y: HALF_PAPER_HEIGHT / 2,
         duration: FOLD_ANIMATION_DURATION, // Corrected typo FAND_ to FOLD_
         ease: 'power3.inOut',
         stagger: 0.05,
       }, "<");
 
-      // Step 2: Unfold the right group (TR+BR)
-      tl.current.to(rightFoldGroupRef.current.rotation, {
-        y: 0,
-        duration: FOLD_ANIMATION_DURATION * 1.2,
-        ease: 'power3.inOut',
-      });
-      tl.current.to(rightFoldGroupRef.current.position, {
-        x: 0,
+    // Step 2: Unfold the right group (TR+BR)
+    tl.current.to(rightFoldGroupRef.current.rotation, {
+      y: 0, 
+      duration: FOLD_ANIMATION_DURATION * 1.2, 
+      ease: 'power3.inOut',
+    });
+    tl.current.to(rightFoldGroupRef.current.position, {
+        x: 0, 
         z: 0,
         duration: FOLD_ANIMATION_DURATION * 1.2,
         ease: 'power3.inOut',
-      }, "<");
+    }, "<");
     }
 
     // Set initial state or snap to state if timeline was just created (first mount or remount)

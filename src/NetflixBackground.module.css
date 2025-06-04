@@ -6,14 +6,27 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #141414; /* Netflix-like dark background */
+  background-color: #000000; /* Pure black background like Netflix */
   z-index: -1; /* Ensure it's behind other content */
+}
+
+.netflixBackground::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.7) 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  z-index: 1;
 }
 
 .perspectiveContainer {
   width: 100%;
   height: 100%;
-  perspective: 1200px; /* Increased perspective for more depth with less tilt */
+  perspective: 1500px; /* Increased perspective for more depth */
   transform-style: preserve-3d;
   display: flex;
   flex-direction: column;
@@ -22,25 +35,24 @@
 }
 
 .gridContainer {
-  width: 140%; /* Adjusted width */
-  height: 140%; /* Adjusted height */
+  width: 150%; /* Wider to fill the screen better */
+  height: 150%; /* Taller to fill the screen better */
   transform-style: preserve-3d;
-  /* Reduced rotateX significantly, adjusted translateY and scale */
-  transform: rotateX(25deg) translateY(-12%) scale(1); 
+  /* Adjusted to match Netflix angle and distance */
+  transform: rotateX(28deg) translateY(-15%) scale(1); 
   display: flex;
   flex-direction: column;
-  gap: 15px; /* Slightly increased gap between rows */
+  gap: 15px; /* Gap between rows */
 }
 
 .posterRow {
   display: flex;
   transform-style: preserve-3d;
-  gap: 15px; /* Slightly increased gap between posters */
+  gap: 15px; /* Gap between posters */
 }
 
 .posterRow:nth-child(even) {
-  /* Adjusted staggering to work with new perspective */
-  /* This will now be primarily handled by the inline style in the TSX for Z-translation */
+  /* This is handled by inline style in the TSX */
 }
 
 .posterItem {
@@ -49,26 +61,26 @@
   flex-shrink: 0; 
   background-size: cover;
   background-position: center;
-  border-radius: 6px;
-  opacity: 0.35; 
-  box-shadow: 0px 6px 18px rgba(0, 0, 0, 0.65);
+  border-radius: 4px; /* Netflix posters have less rounded corners */
+  opacity: 0.45; /* Increased from 0.25 to make more visible */
+  box-shadow: 0px 6px 18px rgba(0, 0, 0, 0.85);
   transform-style: preserve-3d;
   transition: transform 0.3s ease-out, opacity 0.3s ease-out, box-shadow 0.3s ease-out;
   position: relative; 
 }
 
 .posterItem:hover {
-  opacity: 0.85;
+  opacity: 0.9; /* Increased from 0.75 for better visibility */
   transform: scale(1.08) translateZ(35px); /* Enhanced hover effect */
-  box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.75);
+  box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.85);
 }
 
 .posterRow.scrollLeft {
-  animation: scrollLeftAnimation 150s linear infinite;
+  animation: scrollLeftAnimation 180s linear infinite; /* Slower scroll */
 }
 
 .posterRow.scrollRight {
-  animation: scrollRightAnimation 150s linear infinite;
+  animation: scrollRightAnimation 180s linear infinite; /* Slower scroll */
 }
 
 @keyframes scrollLeftAnimation {
@@ -87,47 +99,47 @@
 
 /* Medium Desktop / Laptop */
 @media (max-width: 1440px) {
-  .perspectiveContainer { perspective: 1100px; }
-  .gridContainer { transform: rotateX(23deg) translateY(-10%) scale(0.95); gap: 12px; }
+  .perspectiveContainer { perspective: 1300px; }
+  .gridContainer { transform: rotateX(26deg) translateY(-12%) scale(0.95); gap: 12px; }
   .posterItem { width: 160px; height: 240px; opacity: 0.4; }
   .posterRow { gap: 12px; }
 }
 
 /* Tablet Landscape / Small Laptop */
 @media (max-width: 1024px) {
-  .perspectiveContainer { perspective: 900px; }
-  .gridContainer { transform: rotateX(20deg) translateY(-8%) scale(0.9); gap: 10px; width: 145%; height: 145%; }
-  .posterItem { width: 140px; height: 210px; opacity: 0.45; box-shadow: 0px 4px 12px rgba(0,0,0,0.6); }
+  .perspectiveContainer { perspective: 1100px; }
+  .gridContainer { transform: rotateX(24deg) translateY(-10%) scale(0.9); gap: 10px; width: 155%; height: 155%; }
+  .posterItem { width: 140px; height: 210px; opacity: 0.45; box-shadow: 0px 4px 12px rgba(0,0,0,0.7); }
   .posterItem:hover { transform: scale(1.06) translateZ(25px); }
   .posterRow { gap: 10px; }
 }
 
 /* Tablet Portrait / Larger Mobile */
 @media (max-width: 768px) {
-  .perspectiveContainer { perspective: 800px; }
-  .gridContainer { transform: rotateX(18deg) translateY(-5%) scale(0.92); gap: 8px; width: 150%; height: 150%; }
-  .posterItem { width: 115px; height: 172px; opacity: 0.5; border-radius: 4px; box-shadow: 0px 3px 10px rgba(0,0,0,0.55); }
+  .perspectiveContainer { perspective: 900px; }
+  .gridContainer { transform: rotateX(22deg) translateY(-5%) scale(0.92); gap: 8px; width: 160%; height: 160%; }
+  .posterItem { width: 115px; height: 172px; opacity: 0.5; border-radius: 3px; box-shadow: 0px 3px 10px rgba(0,0,0,0.65); }
   .posterItem:hover { transform: scale(1.05) translateZ(20px); }
   .posterRow { gap: 8px; }
   .posterRow.scrollLeft, .posterRow.scrollRight {
-    animation-duration: 180s;
+    animation-duration: 200s;
   }
 }
 
 /* Mobile Landscape */
 @media (max-width: 640px) {
-  .perspectiveContainer { perspective: 700px; }
-  .gridContainer { transform: rotateX(15deg) translateY(-2%) scale(0.95); gap: 6px; width: 160%; height: 160%; }
-  .posterItem { width: 100px; height: 150px; opacity: 0.55; border-radius: 3px; box-shadow: 0px 2px 8px rgba(0,0,0,0.5); }
+  .perspectiveContainer { perspective: 800px; }
+  .gridContainer { transform: rotateX(20deg) translateY(-2%) scale(0.95); gap: 6px; width: 165%; height: 170%; }
+  .posterItem { width: 100px; height: 150px; opacity: 0.55; border-radius: 2px; box-shadow: 0px 2px 8px rgba(0,0,0,0.6); }
   .posterItem:hover { transform: scale(1.04) translateZ(15px); }
   .posterRow { gap: 6px; }
 }
 
 /* Mobile Portrait (Extra Small) */
 @media (max-width: 480px) {
-  .perspectiveContainer { perspective: 600px; }
-  .gridContainer { transform: rotateX(12deg) translateY(0%) scale(1); gap: 5px; width: 170%; height: 170%; }
-  .posterItem { width: 90px; height: 135px; opacity: 0.6; border-radius: 3px; box-shadow: 0px 2px 6px rgba(0,0,0,0.45); }
+  .perspectiveContainer { perspective: 700px; }
+  .gridContainer { transform: rotateX(18deg) translateY(0%) scale(1); gap: 5px; width: 180%; height: 180%; }
+  .posterItem { width: 90px; height: 135px; opacity: 0.6; border-radius: 2px; box-shadow: 0px 2px 6px rgba(0,0,0,0.55); }
   .posterItem:hover { transform: scale(1.03) translateZ(10px); }
   .posterRow { gap: 5px; }
   .posterRow.scrollLeft, .posterRow.scrollRight {
