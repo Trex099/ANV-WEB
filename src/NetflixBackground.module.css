@@ -17,11 +17,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  /* Simpler gradient with fewer color stops for performance */
+  /* Lighter gradient to make images more visible */
   background: linear-gradient(
     0deg,
-    rgba(0, 0, 0, 0.7) 0%,
-    rgba(0, 0, 0, 0.4) 100%
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.3) 100%
   );
   z-index: 1;
 }
@@ -29,7 +29,7 @@
 .perspectiveContainer {
   width: 100%;
   height: 100%;
-  perspective: 1200px; /* Reduced from 1500px for better performance */
+  perspective: 1200px;
   transform-style: preserve-3d;
   display: flex;
   flex-direction: column;
@@ -38,11 +38,11 @@
 }
 
 .gridContainer {
-  width: 140%; /* Reduced from 150% for performance */
-  height: 140%; /* Reduced from 150% for performance */
+  width: 170%; /* Wider for better screen coverage */
+  height: 170%; /* Taller for better screen coverage */
   transform-style: preserve-3d;
-  /* Slightly less aggressive angle for better performance */
-  transform: rotateX(25deg) translateY(-15%) scale(1); 
+  /* Adjusted for better angle and visibility */
+  transform: rotateX(22deg) translateY(-12%) scale(1.05); 
   display: flex;
   flex-direction: column;
   gap: 15px; /* Gap between rows */
@@ -67,30 +67,38 @@
   background-size: cover;
   background-position: center;
   border-radius: 4px;
-  opacity: 0.45;
-  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.7); /* Reduced shadow complexity */
+  opacity: 0.65; /* Increased from 0.45 for better visibility */
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.7);
   transform-style: preserve-3d;
   transition: opacity 0.3s ease-out;
   position: relative; 
-  /* Replace transform transition with opacity only for better performance */
 }
 
 .posterItem:hover {
-  opacity: 0.9; 
-  /* Simplified transform for better performance */
+  opacity: 0.95; /* Increased for better visibility */
   transform: scale(1.05);
 }
 
-/* Optimize animations - use translation only for better performance */
+/* Much faster animations for all devices */
 .posterRow.scrollLeft {
-  animation: scrollLeftAnimation 240s linear infinite; /* Slower animation for less CPU usage */
+  animation: scrollLeftAnimation 80s linear infinite; /* Faster animation */
 }
 
 .posterRow.scrollRight {
-  animation: scrollRightAnimation 240s linear infinite; /* Slower animation for less CPU usage */
+  animation: scrollRightAnimation 80s linear infinite; /* Faster animation */
 }
 
-/* Simpler animations that only animate translation */
+/* Row-specific speed adjustments */
+.posterRow:nth-child(2).scrollLeft,
+.posterRow:nth-child(4).scrollLeft {
+  animation-duration: 70s; /* Even faster for 2nd and 4th rows */
+}
+
+.posterRow:nth-child(2).scrollRight,
+.posterRow:nth-child(4).scrollRight {
+  animation-duration: 70s; /* Even faster for 2nd and 4th rows */
+}
+
 @keyframes scrollLeftAnimation {
   from { transform: translateX(0%); }
   to { transform: translateX(-100%); }
@@ -102,47 +110,65 @@
 }
 
 /* --- Responsive Adjustments --- */
-/* Simplified media queries with fewer breakpoints for better performance */
 
 /* Desktop */
 @media (min-width: 1025px) {
-  .perspectiveContainer { perspective: 1100px; }
-  .posterItem { width: 160px; height: 240px; }
+  .perspectiveContainer { perspective: 1300px; }
+  .gridContainer { 
+    transform: rotateX(25deg) translateY(-15%) scale(1.1);
+    width: 190%; /* Wider for PC to fill more of the screen */
+    height: 180%;
+  }
+  .posterItem { 
+    width: 180px; 
+    height: 270px;
+    opacity: 0.75; /* Higher opacity for PC */
+  }
+  /* Faster animations specifically for desktop */
+  .posterRow.scrollLeft, .posterRow.scrollRight {
+    animation-duration: 60s;
+  }
+  .posterRow:nth-child(2).scrollLeft,
+  .posterRow:nth-child(4).scrollLeft,
+  .posterRow:nth-child(2).scrollRight,
+  .posterRow:nth-child(4).scrollRight {
+    animation-duration: 55s;
+  }
 }
 
 /* Tablet */
 @media (max-width: 1024px) {
-  .perspectiveContainer { perspective: 900px; }
-  .gridContainer { transform: rotateX(22deg) translateY(-10%) scale(0.9); gap: 12px; }
+  .perspectiveContainer { perspective: 1100px; }
+  .gridContainer { transform: rotateX(22deg) translateY(-10%) scale(0.95); gap: 12px; }
   .posterItem { width: 140px; height: 210px; }
   .posterRow.scrollLeft, .posterRow.scrollRight {
-    animation-duration: 300s; /* Even slower animations on medium-sized devices */
+    animation-duration: 70s; /* Faster than before (was 300s) */
   }
 }
 
 /* Mobile */
 @media (max-width: 768px) {
-  .perspectiveContainer { perspective: 800px; }
+  .perspectiveContainer { perspective: 900px; }
   .gridContainer { transform: rotateX(20deg) translateY(-5%) scale(0.9); gap: 10px; }
   .posterItem { 
     width: 110px; 
     height: 165px; 
-    opacity: 0.5;
+    opacity: 0.65;
     box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.6);
   }
   /* Disable hover effects on mobile for better performance */
   .posterItem:hover { 
     transform: none;
-    opacity: 0.7;
+    opacity: 0.85;
   }
   .posterRow.scrollLeft, .posterRow.scrollRight {
-    animation-duration: 360s; /* Much slower animation on mobile */
+    animation-duration: 90s; /* Faster than before (was 360s) */
   }
 }
 
 /* Small Mobile */
 @media (max-width: 480px) {
-  .perspectiveContainer { perspective: 700px; }
+  .perspectiveContainer { perspective: 800px; }
   .gridContainer { 
     transform: rotateX(18deg) translateY(-2%) scale(0.9); 
     gap: 8px; 
@@ -150,15 +176,17 @@
   .posterItem { 
     width: 90px; 
     height: 135px; 
-    opacity: 0.6; 
+    opacity: 0.7; /* Higher opacity for small screens */
     border-radius: 2px;
-    /* Further simplified shadows for performance */
     box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.5);
   }
-  /* Completely disable animations on very small screens if performance is poor */
+  .posterRow.scrollLeft, .posterRow.scrollRight {
+    animation-duration: 100s; /* Faster than before (was 220s or disabled) */
+  }
+  /* Don't completely disable animations on small screens anymore */
   @media (prefers-reduced-motion: reduce) {
     .posterRow.scrollLeft, .posterRow.scrollRight {
-      animation: none;
+      animation-duration: 120s; /* Slower only if reduced motion is preferred */
     }
   }
 } 

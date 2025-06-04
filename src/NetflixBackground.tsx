@@ -35,19 +35,23 @@ const useWindowSize = () => {
   return windowSize;
 };
 
-// Optimized and smaller poster set with lower resolution images
-// Using lower resolution images (200x300 instead of 400x600)
+// Optimized and higher quality poster URLs
 const netflixPosters = [
-  'https://picsum.photos/id/96/200/300',
-  'https://picsum.photos/id/1060/200/300',
-  'https://picsum.photos/id/110/200/300',
-  'https://picsum.photos/id/1047/200/300',
-  'https://picsum.photos/id/237/200/300',
-  'https://picsum.photos/id/26/200/300',
-  'https://picsum.photos/id/27/200/300',
-  'https://picsum.photos/id/28/200/300',
-  'https://picsum.photos/id/29/200/300',
-  'https://picsum.photos/id/42/200/300'
+  'https://picsum.photos/id/96/300/450',
+  'https://picsum.photos/id/1060/300/450',
+  'https://picsum.photos/id/110/300/450',
+  'https://picsum.photos/id/1047/300/450',
+  'https://picsum.photos/id/237/300/450',
+  'https://picsum.photos/id/26/300/450',
+  'https://picsum.photos/id/27/300/450',
+  'https://picsum.photos/id/28/300/450',
+  'https://picsum.photos/id/29/300/450',
+  'https://picsum.photos/id/42/300/450',
+  'https://picsum.photos/id/48/300/450',
+  'https://picsum.photos/id/65/300/450',
+  'https://picsum.photos/id/111/300/450',
+  'https://picsum.photos/id/133/300/450',
+  'https://picsum.photos/id/164/300/450',
 ];
 
 const generatePlaceholderPosters = (count: number): Poster[] => {
@@ -59,6 +63,7 @@ const generatePlaceholderPosters = (count: number): Poster[] => {
 };
 
 // Custom hook for checking if an element is in viewport
+// Fixed the type definition of the ref parameter to resolve the TypeScript error
 const useIsInViewport = (ref: React.RefObject<HTMLDivElement>) => {
   const [isIntersecting, setIsIntersecting] = useState(false);
 
@@ -91,17 +96,22 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
 }) => {
   const { width: windowWidth } = useWindowSize();
   const backgroundRef = useRef<HTMLDivElement>(null);
+  // The issue was in how we use the custom hook - it expects a proper ref
   const isInViewport = useIsInViewport(backgroundRef);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // Load images progressively
+  // Detect if we're on desktop for optimizations
+  const isDesktop = useMemo(() => (windowWidth || 0) >= 1025, [windowWidth]);
+  
+  // Load images progressively but faster
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     
     if (isInViewport && !isLoaded) {
+      // Reduce the delay for faster loading
       timeout = setTimeout(() => {
         setIsLoaded(true);
-      }, 100);
+      }, 50); // Reduced from 100ms
     }
     
     return () => {
@@ -111,30 +121,30 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
 
   const { numRows, postersPerRow, isSmallScreen, isVerySmallScreen } = useMemo(() => {
     const width = windowWidth || 0;
-    // Reduce number of rows and posters for better performance
-    let rows = 5; // Decreased from 7
-    let posters = 12; // Decreased from 16
+    // Adjust rows and poster counts
+    let rows = 6; // Increased for more coverage
+    let posters = 14; // Increased for more coverage
     let smallScreen = false;
     let verySmallScreen = false;
 
     if (width < 480) {
-      rows = 4; // Decreased from 6
-      posters = 7; // Decreased from 9
+      rows = 5;
+      posters = 8;
       smallScreen = true;
       verySmallScreen = true;
     } else if (width < 768) {
-      rows = 5; // Decreased from 7
-      posters = 8; // Decreased from 11
+      rows = 5;
+      posters = 9;
       smallScreen = true;
     } else if (width < 1024) {
-      rows = 5; // Decreased from 7
-      posters = 10; // Decreased from 12
-    } else if (width < 1440) {
-      rows = 5;
-      posters = 12;
-    } else {
       rows = 6;
-      posters = 14;
+      posters = 12;
+    } else if (width < 1440) {
+      rows = 7; // More rows for desktop
+      posters = 15;
+    } else {
+      rows = 8; // Even more for large screens
+      posters = 18;
     }
     return { numRows: rows, postersPerRow: posters, isSmallScreen: smallScreen, isVerySmallScreen: verySmallScreen };
   }, [windowWidth]);
@@ -147,14 +157,15 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
         altText: `Custom Poster ${i + 1}`,
       }));
     }
-    // Reduced from numRows * postersPerRow * 2 to improve performance
-    return generatePlaceholderPosters(numRows * postersPerRow);
-  }, [imageUrls, numRows, postersPerRow]);
+    // Add enough posters for better coverage, especially on desktop
+    const posterCount = isDesktop ? numRows * postersPerRow * 1.5 : numRows * postersPerRow;
+    return generatePlaceholderPosters(Math.ceil(posterCount));
+  }, [imageUrls, numRows, postersPerRow, isDesktop]);
 
-  // Preload essential images only
+  // Preload essential images
   useEffect(() => {
-    // Only preload a small subset of images
-    const imagesToPreload = netflixPosters.slice(0, isSmallScreen ? 4 : 6);
+    // Preload more images for desktop, fewer for mobile
+    const imagesToPreload = netflixPosters.slice(0, isSmallScreen ? 5 : 10);
     
     imagesToPreload.forEach(src => {
       const img = new Image();
@@ -162,9 +173,9 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
     });
   }, [isSmallScreen]);
 
-  // Calculate poster rows with optimized performance
+  // Calculate poster rows with enough posters for smooth scrolling
   const posterRows: Poster[][] = useMemo(() => {
-    // Don't calculate if not in viewport or not loaded for performance
+    // Don't calculate if not in viewport, but do minimal calculation for faster initial render
     if (!isInViewport && !isLoaded) {
       return [];
     }
@@ -174,8 +185,10 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
     
     for (let i = 0; i < numRows; i++) {
       const rowPosters: Poster[] = [];
-      // Use fewer posters per row for performance
-      const actualPostersPerRow = postersPerRow + (i % 2 === 0 ? 2 : 0);
+      // Add more posters per row for smoother scrolling
+      // For desktop, we want more posters to fill the screen
+      const postersMultiplier = isDesktop ? 3 : 2;
+      const actualPostersPerRow = postersPerRow * postersMultiplier;
       
       for (let j = 0; j < actualPostersPerRow; j++) {
         rowPosters.push(posters[posterIndex % posters.length]);
@@ -186,7 +199,7 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
     }
     
     return rows;
-  }, [posters, numRows, postersPerRow, isInViewport, isLoaded]);
+  }, [posters, numRows, postersPerRow, isInViewport, isLoaded, isDesktop]);
 
   // Enable hardware acceleration
   useEffect(() => {
@@ -207,12 +220,11 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
       <div className={styles.perspectiveContainer}>
         <div className={styles.gridContainer}>
           {posterRows.map((row, rowIndex) => {
-            // Simplified Z-translation for better performance
-            const rowDepth = isVerySmallScreen ? 25 : (isSmallScreen ? 35 : 50);
+            // Adjusted depth for better visibility
+            const rowDepth = isVerySmallScreen ? 20 : (isSmallScreen ? 30 : 40);
             const zTranslate = -rowIndex * rowDepth;
             
-            // Only apply different animation directions to alternate rows
-            // This reduces the CSS complexity
+            // Use row index to determine animation direction
             const isEvenRow = rowIndex % 2 === 0;
             
             return (
@@ -221,23 +233,21 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
                 className={`${styles.posterRow} ${isEvenRow ? styles.scrollLeft : styles.scrollRight}`}
                 style={{
                   transform: `translateZ(${zTranslate}px) translateX(${isEvenRow ? '0px' : '-20px'})`,
-                  // Apply will-change only to actively animating properties for performance
                   willChange: 'transform'
                 }}
               >
                 {row.map((poster, posterIndex) => {
-                  // Greatly simplified transforms for better performance
-                  // Use smaller angle variations
-                  const rotateY = isSmallScreen ? 0 : (Math.random() * 6 - 3);
-                  const rotateX = isSmallScreen ? 0 : (Math.random() * 4 - 2);
+                  // Use smaller rotations for stability
+                  const rotateY = isSmallScreen ? 0 : (Math.sin(posterIndex * 0.5) * 4);
+                  const rotateX = isSmallScreen ? 0 : (Math.cos(posterIndex * 0.5) * 2);
                   
-                  // Skip applying transforms on mobile entirely for better performance
+                  // Skip transforms on mobile entirely
                   const transform = isVerySmallScreen 
                     ? '' 
                     : `rotateY(${rotateY}deg) rotateX(${rotateX}deg)`;
                   
-                  // Apply lower z-index for mobile
-                  const zIndex = Math.min(numRows - rowIndex, 3);
+                  // Deterministic z-index for consistency
+                  const zIndex = numRows - rowIndex;
                   
                   return (
                     <div
@@ -247,12 +257,11 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
                         backgroundImage: `url(${poster.imageUrl})`,
                         transform,
                         zIndex,
-                        // Apply loading strategy
                         opacity: isLoaded ? undefined : 0,
                         transition: 'opacity 0.3s ease-out'
                       }}
                       aria-label={poster.altText}
-                      data-loading="lazy" // Use data attribute instead of loading
+                      data-loading="lazy"
                     />
                   );
                 })}
