@@ -60,6 +60,11 @@
   will-change: transform;
   /* Prevent sub-pixel rendering issues */
   transform-origin: center center;
+  /* Start with no animation */
+  animation: none;
+  opacity: 0;
+  animation-fill-mode: both;
+  transition: opacity 0.3s ease-out;
 }
 
 .posterItem {
@@ -91,52 +96,64 @@
   /* Improve rendering of WebP images */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Fade in effect */
+  animation: fadeIn 0.5s ease-out forwards;
+  opacity: 0;
 }
 
-.posterItem:hover {
-  opacity: 1.0; /* Full opacity on hover */
-  transform: scale(1.05);
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 0.8; }
 }
 
-/* Animations */
-.posterRow.scrollLeft {
+/* Classes that activate animations with performance optimization */
+.posterRow.scrollLeftActive {
   animation: scrollLeftAnimation 85s linear infinite;
-  will-change: transform;
   animation-fill-mode: forwards; /* Prevent random animation resets */
   animation-play-state: running; /* Ensure animation keeps running */
-  animation-delay: -2s; /* Stagger animation start */
+  opacity: 1;
+  transition: opacity 0.5s ease-in;
+}
+
+.posterRow.scrollRightActive {
+  animation: scrollRightAnimation 85s linear infinite;
+  animation-fill-mode: forwards; /* Prevent random animation resets */
+  animation-play-state: running; /* Ensure animation keeps running */
+  opacity: 1;
+  transition: opacity 0.5s ease-in;
+}
+
+/* Keep these for backwards compatibility but they don't immediately activate */
+.posterRow.scrollLeft {
+  will-change: transform;
 }
 
 .posterRow.scrollRight {
-  animation: scrollRightAnimation 85s linear infinite;
   will-change: transform;
-  animation-fill-mode: forwards; /* Prevent random animation resets */
-  animation-play-state: running; /* Ensure animation keeps running */
-  animation-delay: -1s; /* Stagger animation start */
 }
 
 /* Row-specific speed adjustments */
-.posterRow:nth-child(2).scrollLeft {
+.posterRow:nth-child(2).scrollLeftActive {
   animation-duration: 78s;
 }
 
-.posterRow:nth-child(2).scrollRight {
+.posterRow:nth-child(2).scrollRightActive {
   animation-duration: 78s;
 }
 
-.posterRow:nth-child(3).scrollLeft {
-  animation-duration: 82s; 
-}
-
-.posterRow:nth-child(3).scrollRight {
+.posterRow:nth-child(3).scrollLeftActive {
   animation-duration: 82s;
 }
 
-.posterRow:nth-child(4).scrollLeft {
+.posterRow:nth-child(3).scrollRightActive {
+  animation-duration: 82s;
+}
+
+.posterRow:nth-child(4).scrollLeftActive {
   animation-duration: 75s;
 }
 
-.posterRow:nth-child(4).scrollRight {
+.posterRow:nth-child(4).scrollRightActive {
   animation-duration: 75s;
 }
 
@@ -266,4 +283,29 @@
     width: 100px;
     height: 150px;
   }
+}
+
+/* Loading state styles */
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0a0a0a 0%, #151515 50%, #0c0c0c 100%);
+  opacity: 0.5;
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: rgba(255, 255, 255, 0.5);
+  animation: spin 1s linear infinite;
+  opacity: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 } 

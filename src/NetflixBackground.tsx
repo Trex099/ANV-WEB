@@ -307,8 +307,28 @@ const PosterRow = React.memo(({
   posters: Poster[],
   isMobile: boolean
 }) => {
+  // Prepare row for animation before it renders
+  const rowRef = useRef<HTMLDivElement>(null);
+  
+  // Use this effect to prepare the animation
+  useEffect(() => {
+    if (!rowRef.current) return;
+    
+    // Apply transform properties before animation starts to improve performance
+    const row = rowRef.current;
+    
+    // Force a reflow to ensure the will-change property is applied before animation
+    void row.offsetHeight;
+    
+    // Add a class that will start the animation with a slight delay
+    setTimeout(() => {
+      row.classList.add(isScrollLeft ? styles.scrollLeftActive : styles.scrollRightActive);
+    }, rowIndex * 120); // Staggered animation start
+  }, [rowIndex, isScrollLeft]);
+  
   return (
     <div
+      ref={rowRef}
       className={`${styles.posterRow} ${isScrollLeft ? styles.scrollLeft : styles.scrollRight}`}
       style={{
         transform: `translateZ(${zTranslate}px) translateX(${isScrollLeft ? '0px' : '-20px'})`,
@@ -328,12 +348,13 @@ const PosterRow = React.memo(({
         
         return (
           <div
-            key={poster.id} // Use stable ID to prevent refreshes
+            key={poster.id}
             className={styles.posterItem}
             style={{
               backgroundImage: `url(${poster.imageUrl})`,
               transform,
               zIndex: 4 - rowIndex,
+              animationDelay: `${posterIndex * 50}ms`,
             }}
             aria-label={poster.altText}
             data-row={rowIndex}
@@ -344,6 +365,15 @@ const PosterRow = React.memo(({
     </div>
   );
 });
+
+// Add a loading state component that appears quickly
+const LoadingState = () => (
+  <div className={styles.netflixBackground}>
+    <div className={styles.loadingOverlay}>
+      <div className={styles.loadingSpinner} />
+    </div>
+  </div>
+);
 
 const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
   imageUrls,
@@ -467,9 +497,22 @@ const NetflixBackground: React.FC<NetflixBackgroundProps> = ({
   // After the useCustomImages hook, add this new hook:
   useImagePreloader(availableImages);
 
+  // Use a smaller and faster initial set of images
+  const initialLoadRef = useRef<boolean>(false);
+  
+  useEffect(() => {
+    if (!initialLoadRef.current && availableImages.length > 0) {
+      initialLoadRef.current = true;
+      // Force fast display
+      setTimeout(() => {
+        setImagesLoaded(true);
+      }, 100);
+    }
+  }, [availableImages]);
+
   if (!imagesLoaded) {
-    // Simple loading state
-    return <div ref={backgroundRef} className={styles.netflixBackground}></div>;
+    // More responsive loading state
+    return <LoadingState />;
   }
 
   return (
