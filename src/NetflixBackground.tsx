@@ -179,9 +179,20 @@ const useCustomImages = () => {
           let foundImage = false;
           
           for (const ext of possibleExtensions) {
-            // Use a consistent naming pattern
+            // Try the optimized version first
+            const optimizedPath = `/images/netflix-grid/optimized/image-${i}.jpg`;
+            let exists = await checkImageURL(optimizedPath);
+            
+            if (exists) {
+              customImageList.push(optimizedPath);
+              foundIndices.add(i);
+              foundImage = true;
+              break;
+            }
+            
+            // If optimized isn't available, check original
             const imagePath = `/images/netflix-grid/image-${i}.${ext}`;
-            const exists = await checkImageURL(imagePath);
+            exists = await checkImageURL(imagePath);
             
             if (exists) {
               customImageList.push(imagePath);
